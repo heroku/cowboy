@@ -96,10 +96,7 @@ request(Method, URL, Headers, Body, Client=#client{
 	end,
 	VersionBin = atom_to_binary(Version, latin1),
 	%% @todo do keepalive too, allow override...
-	Headers2 = [
-		{<<"host">>, FullHost},
-		{<<"user-agent">>, <<"Cow">>}
-	|Headers],
+	Headers2 = [{<<"host">>, FullHost} | Headers],
 	Headers3 = case iolist_size(Body) of
 		0 -> Headers2;
 		Length -> [{<<"content-length">>, integer_to_list(Length)}|Headers2]
