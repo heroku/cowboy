@@ -73,12 +73,16 @@ close(#client{transport=Transport, socket=Socket}) ->
 connect(Transport, Host, Port, Client)
 		when is_binary(Host) ->
 	connect(Transport, binary_to_list(Host), Port, Client);
-connect(Transport, Host, Port, Client=#client{state=State, opts=Opts})
+connect(Transport, Host, Port, Client=#client{state=wait, opts=Opts})
 		when is_atom(Transport), is_list(Host),
-			is_integer(Port), is_record(Client, client),
-			State =:= wait ->
-	{ok, Socket} = Transport:connect(Host, Port, Opts),
-	{ok, Client#client{state=request, socket=Socket, transport=Transport}}.
+			is_integer(Port) ->
+	case Transport:connect(Host, Port, Opts) of
+		{ok, Socket} ->
+			{ok, Client#client{state=request,
+							   socket=Socket,
+							   transport=Transport}};
+		{error, _} = Err -> Err
+	end.
 
 raw_request(Data, Client=#client{state=response_body}) ->
 	{done, Client2} = skip_body(Client),
