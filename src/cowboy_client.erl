@@ -245,7 +245,7 @@ stream_header(Client=#client{state=State, buffer=Buffer,
 			{done, Client2#client{buffer=Rest}};
 		[Line, Rest] ->
 			%% @todo Do a better parsing later on.
-			[Name, Value] = binary:split(Line, <<": ">>),
+			[Name, Value] = binary:split(Line, [<<": ">>, <<":">>]),
 			Name2 = cowboy_bstr:to_lower(Name),
 			Client2 = case Name2 of
 				<<"content-length">> ->
