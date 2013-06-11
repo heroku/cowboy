@@ -2,58 +2,27 @@
 
 PROJECT = cowboy
 
-DIALYZER = dialyzer
-REBAR = rebar
+# Options.
 
-all: app
+COMPILE_FIRST = cowboy_middleware cowboy_sub_protocol
+CT_SUITES = eunit http spdy ws
+PLT_APPS = crypto public_key ssl
 
-# Application.
+# Dependencies.
 
-deps:
-	@$(REBAR) get-deps
+DEPS = ranch
+TEST_DEPS = ct_helper
+dep_ranch = https://github.com/extend/ranch.git 0.8.3
+dep_ct_helper = https://github.com/extend/ct_helper.git master
 
-app: deps
-	@$(REBAR) compile
+# Standard targets.
 
-clean:
-	@$(REBAR) clean
-	rm -f test/*.beam
-	rm -f erl_crash.dump
+include erlang.mk
 
-docs: clean-docs
-	@$(REBAR) doc skip_deps=true
+# Extra targets.
 
-clean-docs:
-	rm -f doc/*.css
-	rm -f doc/*.html
-	rm -f doc/*.png
-	rm -f doc/edoc-info
+.PHONY: autobahn
 
-# Tests.
-
-deps/proper:
-	@$(REBAR) -C rebar.tests.config get-deps
-	cd deps/proper && $(REBAR) compile
-
-tests: clean deps/proper app eunit ct
-
-inttests: clean deps/proper app eunit intct
-
-eunit:
-	@$(REBAR) -C rebar.tests.config eunit skip_deps=true
-
-ct:
-	@$(REBAR) -C rebar.tests.config ct skip_deps=true suites=http,proper,ws
-
-intct:
-	@$(REBAR) -C rebar.tests.config ct skip_deps=true suites=http,proper,ws,autobahn
-
-# Dialyzer.
-
-build-plt:
-	@$(DIALYZER) --build_plt --output_plt .$(PROJECT).plt \
-		--apps kernel stdlib sasl inets crypto public_key ssl
-
-dialyze:
-	@$(DIALYZER) --src src --plt .$(PROJECT).plt --no_native \
-		-Werror_handling -Wrace_conditions -Wunmatched_returns # -Wunderspecs
+autobahn: clean clean-deps deps app build-tests
+	@mkdir -p logs/
+	@$(CT_RUN) -suite autobahn_SUITE

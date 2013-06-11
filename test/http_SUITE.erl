@@ -1,4 +1,4 @@
-%% Copyright (c) 2011-2012, Loïc Hoguin <essen@ninenines.eu>
+%% Copyright (c) 2011-2013, Loïc Hoguin <essen@ninenines.eu>
 %% Copyright (c) 2011, Anthony Ramine <nox@dev-extend.eu>
 %%
 %% Permission to use, copy, modify, and/or distribute this software for any
@@ -30,6 +30,9 @@
 -export([check_status/1]).
 -export([chunked_response/1]).
 -export([echo_body/1]).
+-export([echo_body_max_length/1]).
+-export([echo_body_qs/1]).
+-export([echo_body_qs_max_length/1]).
 -export([error_chain_handle_after_reply/1]).
 -export([error_chain_handle_before_reply/1]).
 -export([error_handle_after_reply/1]).
@@ -45,17 +48,32 @@
 -export([nc_zero/1]).
 -export([onrequest/1]).
 -export([onrequest_reply/1]).
+-export([onresponse_capitalize/1]).
 -export([onresponse_crash/1]).
 -export([onresponse_reply/1]).
 -export([pipeline/1]).
+-export([pipeline_long_polling/1]).
+-export([rest_bad_accept/1]).
+-export([rest_bad_content_type/1]).
+-export([rest_expires/1]).
 -export([rest_keepalive/1]).
 -export([rest_keepalive_post/1]).
+-export([rest_missing_get_callbacks/1]).
+-export([rest_missing_put_callbacks/1]).
 -export([rest_nodelete/1]).
+-export([rest_options_default/1]).
+-export([rest_param_all/1]).
+-export([rest_patch/1]).
+-export([rest_post_charset/1]).
+-export([rest_postonly/1]).
 -export([rest_resource_etags/1]).
 -export([rest_resource_etags_if_none_match/1]).
+-export([set_env_dispatch/1]).
 -export([set_resp_body/1]).
 -export([set_resp_header/1]).
 -export([set_resp_overwrite/1]).
+-export([slowloris/1]).
+-export([slowloris2/1]).
 -export([static_attribute_etag/1]).
 -export([static_function_etag/1]).
 -export([static_mimetypes_function/1]).
@@ -64,14 +82,27 @@
 -export([static_test_file/1]).
 -export([static_test_file_css/1]).
 -export([stream_body_set_resp/1]).
+-export([stream_body_set_resp_close/1]).
+-export([stream_body_set_resp_chunked/1]).
+-export([stream_body_set_resp_chunked10/1]).
 -export([te_chunked/1]).
+-export([te_chunked_chopped/1]).
 -export([te_chunked_delayed/1]).
 -export([te_identity/1]).
 
 %% ct.
 
 all() ->
-	[{group, http}, {group, https}, {group, onrequest}, {group, onresponse}].
+	[
+		{group, http},
+		{group, https},
+		{group, http_compress},
+		{group, https_compress},
+		{group, onrequest},
+		{group, onresponse},
+		{group, onresponse_capitalize},
+		{group, set_env}
+	].
 
 groups() ->
 	Tests = [
@@ -79,6 +110,9 @@ groups() ->
 		check_status,
 		chunked_response,
 		echo_body,
+		echo_body_max_length,
+		echo_body_qs,
+		echo_body_qs_max_length,
 		error_chain_handle_after_reply,
 		error_chain_handle_before_reply,
 		error_handle_after_reply,
@@ -93,14 +127,27 @@ groups() ->
 		nc_rand,
 		nc_zero,
 		pipeline,
+		pipeline_long_polling,
+		rest_bad_accept,
+		rest_bad_content_type,
+		rest_expires,
 		rest_keepalive,
 		rest_keepalive_post,
+		rest_missing_get_callbacks,
+		rest_missing_put_callbacks,
 		rest_nodelete,
+		rest_options_default,
+		rest_param_all,
+		rest_patch,
+		rest_post_charset,
+		rest_postonly,
 		rest_resource_etags,
 		rest_resource_etags_if_none_match,
 		set_resp_body,
 		set_resp_header,
 		set_resp_overwrite,
+		slowloris,
+		slowloris2,
 		static_attribute_etag,
 		static_function_etag,
 		static_mimetypes_function,
@@ -109,108 +156,158 @@ groups() ->
 		static_test_file,
 		static_test_file_css,
 		stream_body_set_resp,
+		stream_body_set_resp_close,
+		stream_body_set_resp_chunked,
+		stream_body_set_resp_chunked10,
 		te_chunked,
+		te_chunked_chopped,
 		te_chunked_delayed,
 		te_identity
 	],
 	[
-		{http, [], Tests},
-		{https, [], Tests},
-		{onrequest, [], [
+		{http, [parallel], Tests},
+		{https, [parallel], Tests},
+		{http_compress, [parallel], Tests},
+		{https_compress, [parallel], Tests},
+		{onrequest, [parallel], [
 			onrequest,
 			onrequest_reply
 		]},
-		{onresponse, [], [
+		{onresponse, [parallel], [
 			onresponse_crash,
 			onresponse_reply
+		]},
+		{onresponse_capitalize, [parallel], [
+			onresponse_capitalize
+		]},
+		{set_env, [], [
+			set_env_dispatch
 		]}
 	].
 
 init_per_suite(Config) ->
-	application:start(inets),
+	application:start(crypto),
+	application:start(ranch),
 	application:start(cowboy),
-	Config.
+	Dir = ?config(priv_dir, Config) ++ "/static",
+	ct_helper:create_static_dir(Dir),
+	[{static_dir, Dir}|Config].
 
-end_per_suite(_Config) ->
+end_per_suite(Config) ->
+	Dir = ?config(static_dir, Config),
+	ct_helper:delete_static_dir(Dir),
 	application:stop(cowboy),
-	application:stop(inets),
+	application:stop(ranch),
+	application:stop(crypto),
 	ok.
 
 init_per_group(http, Config) ->
-	Port = 33080,
-	Transport = cowboy_tcp_transport,
-	Config1 = init_static_dir(Config),
-	{ok, _} = cowboy:start_listener(http, 100,
-		Transport, [{port, Port}],
-		cowboy_http_protocol, [
-			{dispatch, init_dispatch(Config1)},
-			{max_keepalive, 50},
-			{timeout, 500}]
-	),
+	Transport = ranch_tcp,
+	{ok, _} = cowboy:start_http(http, 100, [{port, 0}], [
+		{env, [{dispatch, init_dispatch(Config)}]},
+		{max_keepalive, 50},
+		{timeout, 500}
+	]),
+	Port = ranch:get_port(http),
 	{ok, Client} = cowboy_client:init([]),
 	[{scheme, <<"http">>}, {port, Port}, {opts, []},
-		{transport, Transport}, {client, Client}|Config1];
+		{transport, Transport}, {client, Client}|Config];
 init_per_group(https, Config) ->
-	Port = 33081,
-	Transport = cowboy_ssl_transport,
-	Opts = [
-		{certfile, ?config(data_dir, Config) ++ "cert.pem"},
-		{keyfile, ?config(data_dir, Config) ++ "key.pem"},
-		{password, "cowboy"}
-	],
-	Config1 = init_static_dir(Config),
-	application:start(crypto),
+	Transport = ranch_ssl,
+	{_, Cert, Key} = ct_helper:make_certs(),
+	Opts = [{cert, Cert}, {key, Key}],
 	application:start(public_key),
 	application:start(ssl),
-	{ok, _} = cowboy:start_listener(https, 100,
-		Transport, Opts ++ [{port, Port}],
-		cowboy_http_protocol, [
-			{dispatch, init_dispatch(Config1)},
-			{max_keepalive, 50},
-			{timeout, 500}]
-	),
+	{ok, _} = cowboy:start_https(https, 100, Opts ++ [{port, 0}], [
+		{env, [{dispatch, init_dispatch(Config)}]},
+		{max_keepalive, 50},
+		{timeout, 500}
+	]),
+	Port = ranch:get_port(https),
 	{ok, Client} = cowboy_client:init(Opts),
 	[{scheme, <<"https">>}, {port, Port}, {opts, Opts},
-		{transport, Transport}, {client, Client}|Config1];
+		{transport, Transport}, {client, Client}|Config];
+init_per_group(http_compress, Config) ->
+	Transport = ranch_tcp,
+	{ok, _} = cowboy:start_http(http_compress, 100, [{port, 0}], [
+		{compress, true},
+		{env, [{dispatch, init_dispatch(Config)}]},
+		{max_keepalive, 50},
+		{timeout, 500}
+	]),
+	Port = ranch:get_port(http_compress),
+	{ok, Client} = cowboy_client:init([]),
+	[{scheme, <<"http">>}, {port, Port}, {opts, []},
+		{transport, Transport}, {client, Client}|Config];
+init_per_group(https_compress, Config) ->
+	Transport = ranch_ssl,
+	{_, Cert, Key} = ct_helper:make_certs(),
+	Opts = [{cert, Cert}, {key, Key}],
+	application:start(public_key),
+	application:start(ssl),
+	{ok, _} = cowboy:start_https(https_compress, 100, Opts ++ [{port, 0}], [
+		{compress, true},
+		{env, [{dispatch, init_dispatch(Config)}]},
+		{max_keepalive, 50},
+		{timeout, 500}
+	]),
+	Port = ranch:get_port(https_compress),
+	{ok, Client} = cowboy_client:init(Opts),
+	[{scheme, <<"https">>}, {port, Port}, {opts, Opts},
+		{transport, Transport}, {client, Client}|Config];
 init_per_group(onrequest, Config) ->
-	Port = 33082,
-	Transport = cowboy_tcp_transport,
-	{ok, _} = cowboy:start_listener(onrequest, 100,
-		Transport, [{port, Port}],
-		cowboy_http_protocol, [
-			{dispatch, init_dispatch(Config)},
-			{max_keepalive, 50},
-			{onrequest, fun onrequest_hook/1},
-			{timeout, 500}
-		]),
+	Transport = ranch_tcp,
+	{ok, _} = cowboy:start_http(onrequest, 100, [{port, 0}], [
+		{env, [{dispatch, init_dispatch(Config)}]},
+		{max_keepalive, 50},
+		{onrequest, fun onrequest_hook/1},
+		{timeout, 500}
+	]),
+	Port = ranch:get_port(onrequest),
 	{ok, Client} = cowboy_client:init([]),
 	[{scheme, <<"http">>}, {port, Port}, {opts, []},
 		{transport, Transport}, {client, Client}|Config];
 init_per_group(onresponse, Config) ->
-	Port = 33083,
-	Transport = cowboy_tcp_transport,
-	{ok, _} = cowboy:start_listener(onresponse, 100,
-		Transport, [{port, Port}],
-		cowboy_http_protocol, [
-			{dispatch, init_dispatch(Config)},
-			{max_keepalive, 50},
-			{onresponse, fun onresponse_hook/3},
-			{timeout, 500}
-		]),
+	Transport = ranch_tcp,
+	{ok, _} = cowboy:start_http(onresponse, 100, [{port, 0}], [
+		{env, [{dispatch, init_dispatch(Config)}]},
+		{max_keepalive, 50},
+		{onresponse, fun onresponse_hook/4},
+		{timeout, 500}
+	]),
+	Port = ranch:get_port(onresponse),
+	{ok, Client} = cowboy_client:init([]),
+	[{scheme, <<"http">>}, {port, Port}, {opts, []},
+		{transport, Transport}, {client, Client}|Config];
+init_per_group(onresponse_capitalize, Config) ->
+	Transport = ranch_tcp,
+	{ok, _} = cowboy:start_http(onresponse_capitalize, 100, [{port, 0}], [
+		{env, [{dispatch, init_dispatch(Config)}]},
+		{max_keepalive, 50},
+		{onresponse, fun onresponse_capitalize_hook/4},
+		{timeout, 500}
+	]),
+	Port = ranch:get_port(onresponse_capitalize),
+	{ok, Client} = cowboy_client:init([]),
+	[{scheme, <<"http">>}, {port, Port}, {opts, []},
+		{transport, Transport}, {client, Client}|Config];
+init_per_group(set_env, Config) ->
+	Transport = ranch_tcp,
+	{ok, _} = cowboy:start_http(set_env, 100, [{port, 0}], [
+		{env, [{dispatch, []}]},
+		{max_keepalive, 50},
+		{timeout, 500}
+	]),
+	Port = ranch:get_port(set_env),
 	{ok, Client} = cowboy_client:init([]),
 	[{scheme, <<"http">>}, {port, Port}, {opts, []},
 		{transport, Transport}, {client, Client}|Config].
 
-end_per_group(https, Config) ->
-	cowboy:stop_listener(https),
+end_per_group(Name, _) when Name =:= https; Name =:= https_compress ->
+	cowboy:stop_listener(Name),
 	application:stop(ssl),
 	application:stop(public_key),
-	application:stop(crypto),
-	end_static_dir(Config),
 	ok;
-end_per_group(http, Config) ->
-	cowboy:stop_listener(http),
-	end_static_dir(Config);
 end_per_group(Name, _) ->
 	cowboy:stop_listener(Name),
 	ok.
@@ -218,73 +315,70 @@ end_per_group(Name, _) ->
 %% Dispatch configuration.
 
 init_dispatch(Config) ->
-	[
-		{[<<"localhost">>], [
-			{[<<"chunked_response">>], chunked_handler, []},
-			{[<<"init_shutdown">>], http_handler_init_shutdown, []},
-			{[<<"long_polling">>], http_handler_long_polling, []},
-			{[<<"headers">>, <<"dupe">>], http_handler,
-				[{headers, [{<<"Connection">>, <<"close">>}]}]},
-			{[<<"set_resp">>, <<"header">>], http_handler_set_resp,
-				[{headers, [{<<"Vary">>, <<"Accept">>}]}]},
-			{[<<"set_resp">>, <<"overwrite">>], http_handler_set_resp,
-				[{headers, [{<<"Server">>, <<"DesireDrive/1.0">>}]}]},
-			{[<<"set_resp">>, <<"body">>], http_handler_set_resp,
+	cowboy_router:compile([
+		{"localhost", [
+			{"/chunked_response", http_chunked, []},
+			{"/init_shutdown", http_init_shutdown, []},
+			{"/long_polling", http_long_polling, []},
+			{"/headers/dupe", http_handler,
+				[{headers, [{<<"connection">>, <<"close">>}]}]},
+			{"/set_resp/header", http_set_resp,
+				[{headers, [{<<"vary">>, <<"Accept">>}]}]},
+			{"/set_resp/overwrite", http_set_resp,
+				[{headers, [{<<"server">>, <<"DesireDrive/1.0">>}]}]},
+			{"/set_resp/body", http_set_resp,
 				[{body, <<"A flameless dance does not equal a cycle">>}]},
-			{[<<"stream_body">>, <<"set_resp">>], http_handler_stream_body,
+			{"/stream_body/set_resp", http_stream_body,
 				[{reply, set_resp}, {body, <<"stream_body_set_resp">>}]},
-			{[<<"static">>, '...'], cowboy_http_static,
+			{"/stream_body/set_resp_close",
+				http_stream_body, [
+					{reply, set_resp_close},
+					{body, <<"stream_body_set_resp_close">>}]},
+			{"/stream_body/set_resp_chunked",
+				http_stream_body, [
+					{reply, set_resp_chunked},
+					{body, [<<"stream_body">>, <<"_set_resp_chunked">>]}]},
+			{"/static/[...]", cowboy_static,
 				[{directory, ?config(static_dir, Config)},
 				 {mimetypes, [{<<".css">>, [<<"text/css">>]}]}]},
-			{[<<"static_mimetypes_function">>, '...'], cowboy_http_static,
+			{"/static_mimetypes_function/[...]", cowboy_static,
 				[{directory, ?config(static_dir, Config)},
 				 {mimetypes, {fun(Path, data) when is_binary(Path) ->
 					[<<"text/html">>] end, data}}]},
-			{[<<"handler_errors">>], http_handler_errors, []},
-			{[<<"static_attribute_etag">>, '...'], cowboy_http_static,
+			{"/handler_errors", http_errors, []},
+			{"/static_attribute_etag/[...]", cowboy_static,
 				[{directory, ?config(static_dir, Config)},
 				 {etag, {attributes, [filepath, filesize, inode, mtime]}}]},
-			{[<<"static_function_etag">>, '...'], cowboy_http_static,
+			{"/static_function_etag/[...]", cowboy_static,
 				[{directory, ?config(static_dir, Config)},
 				 {etag, {fun static_function_etag/2, etag_data}}]},
-			{[<<"static_specify_file">>, '...'],  cowboy_http_static,
+			{"/static_specify_file/[...]",  cowboy_static,
 				[{directory, ?config(static_dir, Config)},
 				 {mimetypes, [{<<".css">>, [<<"text/css">>]}]},
-				 {file, <<"test_file.css">>}]},
-			{[<<"multipart">>], http_handler_multipart, []},
-			{[<<"echo">>, <<"body">>], http_handler_echo_body, []},
-			{[<<"simple">>], rest_simple_resource, []},
-			{[<<"forbidden_post">>], rest_forbidden_resource, [true]},
-			{[<<"simple_post">>], rest_forbidden_resource, [false]},
-			{[<<"nodelete">>], rest_nodelete_resource, []},
-			{[<<"resetags">>], rest_resource_etags, []},
-			{[<<"loop_timeout">>], http_handler_loop_timeout, []},
-			{[], http_handler, []}
+				 {file, <<"style.css">>}]},
+			{"/multipart", http_multipart, []},
+			{"/echo/body", http_echo_body, []},
+			{"/echo/body_qs", http_body_qs, []},
+			{"/param_all", rest_param_all, []},
+			{"/bad_accept", rest_simple_resource, []},
+			{"/bad_content_type", rest_patch_resource, []},
+			{"/simple", rest_simple_resource, []},
+			{"/forbidden_post", rest_forbidden_resource, [true]},
+			{"/simple_post", rest_forbidden_resource, [false]},
+			{"/missing_get_callbacks", rest_missing_callbacks, []},
+			{"/missing_put_callbacks", rest_missing_callbacks, []},
+			{"/nodelete", rest_nodelete_resource, []},
+			{"/post_charset", rest_post_charset_resource, []},
+			{"/postonly", rest_postonly_resource, []},
+			{"/patch", rest_patch_resource, []},
+			{"/resetags", rest_resource_etags, []},
+			{"/rest_expires", rest_expires, []},
+			{"/rest_empty_resource", rest_empty_resource, []},
+			{"/loop_recv", http_loop_recv, []},
+			{"/loop_timeout", http_loop_timeout, []},
+			{"/", http_handler, []}
 		]}
-	].
-
-init_static_dir(Config) ->
-	Dir = filename:join(?config(priv_dir, Config), "static"),
-	Level1 = fun(Name) -> filename:join(Dir, Name) end,
-	ok = file:make_dir(Dir),
-	ok = file:write_file(Level1("test_file"), "test_file\n"),
-	ok = file:write_file(Level1("test_file.css"), "test_file.css\n"),
-	ok = file:write_file(Level1("test_noread"), "test_noread\n"),
-	ok = file:change_mode(Level1("test_noread"), 8#0333),
-	ok = file:write_file(Level1("test.html"), "test.html\n"),
-	ok = file:make_dir(Level1("test_dir")),
-	[{static_dir, Dir}|Config].
-
-end_static_dir(Config) ->
-	Dir = ?config(static_dir, Config),
-	Level1 = fun(Name) -> filename:join(Dir, Name) end,
-	ok = file:delete(Level1("test_file")),
-	ok = file:delete(Level1("test_file.css")),
-	ok = file:delete(Level1("test_noread")),
-	ok = file:delete(Level1("test.html")),
-	ok = file:del_dir(Level1("test_dir")),
-	ok = file:del_dir(Dir),
-	Config.
+	]).
 
 %% Convenience functions.
 
@@ -333,17 +427,17 @@ check_raw_status(Config) ->
 	HugeCookie = lists:flatten(["whatever_man_biiiiiiiiiiiig_cookie_me_want_77="
 		"Wed Apr 06 2011 10:38:52 GMT-0500 (CDT)" || _ <- lists:seq(1, 40)]),
 	ResponsePacket =
-"HTTP/1.0 302 Found
-Location: http://www.google.co.il/
-Cache-Control: private
-Content-Type: text/html; charset=UTF-8
-Set-Cookie: PREF=ID=568f67013d4a7afa:FF=0:TM=1323014101:LM=1323014101:S=XqctDWC65MzKT0zC; expires=Tue, 03-Dec-2013 15:55:01 GMT; path=/; domain=.google.com
-Date: Sun, 04 Dec 2011 15:55:01 GMT
-Server: gws
-Content-Length: 221
-X-XSS-Protection: 1; mode=block
-X-Frame-Options: SAMEORIGIN
-
+"HTTP/1.0 302 Found\r
+Location: http://www.google.co.il/\r
+Cache-Control: private\r
+Content-Type: text/html; charset=UTF-8\r
+Set-Cookie: PREF=ID=568f67013d4a7afa:FF=0:TM=1323014101:LM=1323014101:S=XqctDWC65MzKT0zC; expires=Tue, 03-Dec-2013 15:55:01 GMT; path=/; domain=.google.com\r
+Date: Sun, 04 Dec 2011 15:55:01 GMT\r
+Server: gws\r
+Content-Length: 221\r
+X-XSS-Protection: 1; mode=block\r
+X-Frame-Options: SAMEORIGIN\r
+\r
 <HTML><HEAD><meta http-equiv=\"content-type\" content=\"text/html;charset=utf-8\">
 <TITLE>302 Moved</TITLE></HEAD><BODY>
 <H1>302 Moved</H1>
@@ -351,22 +445,29 @@ The document has moved
 <A HREF=\"http://www.google.co.il/\">here</A>.
 </BODY></HTML>",
 	Tests = [
+		{102, <<"GET /long_polling HTTP/1.1\r\nHost: localhost\r\n"
+			"Content-Length: 5000\r\n\r\n", 0:5000/unit:8 >>},
 		{200, ["GET / HTTP/1.0\r\nHost: localhost\r\n"
 			"Set-Cookie: ", HugeCookie, "\r\n\r\n"]},
 		{200, "\r\n\r\n\r\n\r\n\r\nGET / HTTP/1.1\r\nHost: localhost\r\n\r\n"},
 		{200, "GET http://proxy/ HTTP/1.1\r\nHost: localhost\r\n\r\n"},
+		{200, <<"POST /loop_recv HTTP/1.1\r\nHost: localhost\r\n"
+			"Content-Length: 100000\r\n\r\n", 0:100000/unit:8 >>},
 		{400, "\n"},
 		{400, "Garbage\r\n\r\n"},
 		{400, "\r\n\r\n\r\n\r\n\r\n\r\n"},
 		{400, "GET / HTTP/1.1\r\nHost: ninenines.eu\r\n\r\n"},
 		{400, "GET http://proxy/ HTTP/1.1\r\n\r\n"},
-		{400, ResponsePacket},
+		{400, "GET / HTTP/1.1\r\nHost: localhost:bad_port\r\n\r\n"},
+		{505, ResponsePacket},
 		{408, "GET / HTTP/1.1\r\n"},
 		{408, "GET / HTTP/1.1\r\nHost: localhost"},
 		{408, "GET / HTTP/1.1\r\nHost: localhost\r\n"},
 		{408, "GET / HTTP/1.1\r\nHost: localhost\r\n\r"},
-		{413, Huge},
-		{413, "GET / HTTP/1.1\r\n" ++ Huge},
+		{414, Huge},
+		{400, "GET / HTTP/1.1\r\n" ++ Huge},
+		{500, <<"GET /long_polling HTTP/1.1\r\nHost: localhost\r\n"
+			"Content-Length: 100000\r\n\r\n", 0:100000/unit:8 >>},
 		{505, "GET / HTTP/1.2\r\nHost: localhost\r\n\r\n"},
 		{closed, ""},
 		{closed, "\r\n"},
@@ -376,7 +477,8 @@ The document has moved
 	_ = [{Status, Packet} = begin
 		Ret = quick_raw(Packet, Config),
 		{Ret, Packet}
-	end || {Status, Packet} <- Tests].
+	end || {Status, Packet} <- Tests],
+	ok.
 
 check_status(Config) ->
 	Tests = [
@@ -387,9 +489,9 @@ check_status(Config) ->
 		{400, "/static/%2f"},
 		{400, "/static/%2e"},
 		{400, "/static/%2e%2e"},
-		{403, "/static/test_dir"},
-		{403, "/static/test_dir/"},
-		{403, "/static/test_noread"},
+		{403, "/static/directory"},
+		{403, "/static/directory/"},
+		{403, "/static/unreadable"},
 		{404, "/not/found"},
 		{404, "/static/not_found"},
 		{500, "/handler_errors?case=handler_before_reply"},
@@ -401,16 +503,22 @@ check_status(Config) ->
 		{Ret, URL}
 	end || {Status, URL} <- Tests].
 
-%% @todo Convert to cowboy_client.
 chunked_response(Config) ->
-	{ok, {{"HTTP/1.1", 200, "OK"}, _, "chunked_handler\r\nworks fine!"}}
-		= httpc:request(binary_to_list(build_url("/chunked_response", Config))).
+	Client = ?config(client, Config),
+	{ok, Client2} = cowboy_client:request(<<"GET">>,
+		build_url("/chunked_response", Config), Client),
+	{ok, 200, Headers, Client3} = cowboy_client:response(Client2),
+	true = lists:keymember(<<"transfer-encoding">>, 1, Headers),
+	{ok, Transport, Socket} = cowboy_client:transport(Client3),
+	{ok, <<"11\r\nchunked_handler\r\n\r\nB\r\nworks fine!\r\n0\r\n\r\n">>}
+		= Transport:recv(Socket, 44, 1000),
+	{error, closed} = cowboy_client:response(Client3).
 
 %% Check if sending requests whose size is around the MTU breaks something.
 echo_body(Config) ->
 	Client = ?config(client, Config),
 	{ok, [{mtu, MTU}]} = inet:ifget("lo", [mtu]),
-	[begin
+	_ = [begin
 		Body = list_to_binary(lists:duplicate(Size, $a)),
 		{ok, Client2} = cowboy_client:request(<<"POST">>,
 			build_url("/echo/body", Config),
@@ -418,7 +526,43 @@ echo_body(Config) ->
 			Body, Client),
 		{ok, 200, _, Client3} = cowboy_client:response(Client2),
 		{ok, Body, _} = cowboy_client:response_body(Client3)
-	end || Size <- lists:seq(MTU - 500, MTU)].
+	end || Size <- lists:seq(MTU - 500, MTU)],
+	ok.
+
+%% Check if sending request whose size is bigger than 1000000 bytes causes 413
+echo_body_max_length(Config) ->
+	Client = ?config(client, Config),
+	Body = <<$a:8000008>>,
+	{ok, Client2} = cowboy_client:request(<<"POST">>,
+		build_url("/echo/body", Config),
+		[{<<"connection">>, <<"close">>}],
+		Body, Client),
+	{ok, 413, _, _} = cowboy_client:response(Client2).
+
+% check if body_qs echo's back results
+echo_body_qs(Config) ->
+	Client = ?config(client, Config),
+	Body = <<"echo=67890">>,
+	{ok, Client2} = cowboy_client:request(<<"POST">>,
+		build_url("/echo/body_qs", Config),
+		[{<<"connection">>, <<"close">>}],
+		Body, Client),
+	{ok, 200, _, Client3} = cowboy_client:response(Client2),
+	{ok, <<"67890">>, _} = cowboy_client:response_body(Client3).
+
+%% Check if sending request whose size is bigger 16000 bytes causes 413
+echo_body_qs_max_length(Config) ->
+	Client = ?config(client, Config),
+	DefaultMaxBodyQsLength = 16000,
+	% subtract "echo=" minus 1 byte from max to hit the limit
+	Bits = (DefaultMaxBodyQsLength - 4) * 8,
+	AppendedBody = <<$a:Bits>>,
+	Body = <<"echo=", AppendedBody/binary>>,
+	{ok, Client2} = cowboy_client:request(<<"POST">>,
+		build_url("/echo/body_qs", Config),
+		[{<<"connection">>, <<"close">>}],
+		Body, Client),
+	{ok, 413, _, _} = cowboy_client:response(Client2).
 
 error_chain_handle_after_reply(Config) ->
 	Client = ?config(client, Config),
@@ -493,11 +637,11 @@ http10_chunkless(Config) ->
 http10_hostless(Config) ->
 	Port10 = ?config(port, Config) + 10,
 	Name = list_to_atom("http10_hostless_" ++ integer_to_list(Port10)),
-	cowboy:start_listener(Name, 5,
+	ranch:start_listener(Name, 5,
 		?config(transport, Config), ?config(opts, Config) ++ [{port, Port10}],
-		cowboy_http_protocol, [
-			{dispatch, [{'_', [
-				{[<<"http1.0">>, <<"hostless">>], http_handler, []}]}]},
+		cowboy_protocol, [
+			{env, [{dispatch, cowboy_router:compile([
+				{'_', [{"/http1.0/hostless", http_handler, []}]}])}]},
 			{max_keepalive, 50},
 			{timeout, 500}]
 	),
@@ -510,7 +654,8 @@ keepalive_max(Config) ->
 	URL = build_url("/", Config),
 	ok = keepalive_max_loop(Client, URL, 50).
 
-keepalive_max_loop(_, _, 0) ->
+keepalive_max_loop(Client, _, 0) ->
+	{error, closed} = cowboy_client:response(Client),
 	ok;
 keepalive_max_loop(Client, URL, N) ->
 	Headers = [{<<"connection">>, <<"keep-alive">>}],
@@ -529,7 +674,8 @@ keepalive_nl(Config) ->
 	URL = build_url("/", Config),
 	ok = keepalive_nl_loop(Client, URL, 10).
 
-keepalive_nl_loop(_, _, 0) ->
+keepalive_nl_loop(Client, _, 0) ->
+	{error, closed} = cowboy_client:response(Client),
 	ok;
 keepalive_nl_loop(Client, URL, N) ->
 	Headers = [{<<"connection">>, <<"keep-alive">>}],
@@ -558,8 +704,8 @@ multipart(Config) ->
 	{ok, RespBody, _} = cowboy_client:response_body(Client3),
 	Parts = binary_to_term(RespBody),
 	Parts = [
-		{[{<<"X-Name">>, <<"answer">>}], <<"42">>},
-		{[{'Server', <<"Cowboy">>}], <<"It rocks!\r\n">>}
+		{[{<<"x-name">>, <<"answer">>}], <<"42">>},
+		{[{<<"server">>, <<"Cowboy">>}], <<"It rocks!\r\n">>}
 	].
 
 nc_reqs(Config, Input) ->
@@ -603,16 +749,29 @@ onrequest_reply(Config) ->
 
 %% Hook for the above onrequest tests.
 onrequest_hook(Req) ->
-	case cowboy_http_req:qs_val(<<"reply">>, Req) of
+	case cowboy_req:qs_val(<<"reply">>, Req) of
 		{undefined, Req2} ->
-			{ok, Req3} = cowboy_http_req:set_resp_header(
-				'Server', <<"Serenity">>, Req2),
-			Req3;
+			cowboy_req:set_resp_header(<<"server">>, <<"Serenity">>, Req2);
 		{_, Req2} ->
-			{ok, Req3} = cowboy_http_req:reply(
+			{ok, Req3} = cowboy_req:reply(
 				200, [], <<"replied!">>, Req2),
 			Req3
 	end.
+
+onresponse_capitalize(Config) ->
+	Client = ?config(client, Config),
+	{ok, Client2} = cowboy_client:request(<<"GET">>,
+		build_url("/", Config), Client),
+	{ok, Transport, Socket} = cowboy_client:transport(Client2),
+	{ok, Data} = Transport:recv(Socket, 0, 1000),
+	false = nomatch =:= binary:match(Data, <<"Content-Length">>).
+
+%% Hook for the above onresponse_capitalize test.
+onresponse_capitalize_hook(Status, Headers, Body, Req) ->
+	Headers2 = [{cowboy_bstr:capitalize_token(N), V}
+		|| {N, V} <- Headers],
+	{ok, Req2} = cowboy_req:reply(Status, Headers2, Body, Req),
+	Req2.
 
 onresponse_crash(Config) ->
 	Client = ?config(client, Config),
@@ -631,8 +790,8 @@ onresponse_reply(Config) ->
 	{error, closed} = cowboy_client:response_body(Client3).
 
 %% Hook for the above onresponse tests.
-onresponse_hook(_, Headers, Req) ->
-	{ok, Req2} = cowboy_http_req:reply(
+onresponse_hook(_, Headers, _, Req) ->
+	{ok, Req2} = cowboy_req:reply(
 		<<"777 Lucky">>, [{<<"x-hook">>, <<"onresponse">>}|Headers], Req),
 	Req2.
 
@@ -654,6 +813,81 @@ pipeline(Config) ->
 	{ok, 200, _, Client10} = cowboy_client:response(Client9),
 	{ok, 200, _, Client11} = cowboy_client:response(Client10),
 	{error, closed} = cowboy_client:response(Client11).
+
+pipeline_long_polling(Config) ->
+	Client = ?config(client, Config),
+	{ok, Client2} = cowboy_client:request(<<"GET">>,
+		build_url("/long_polling", Config), Client),
+	{ok, Client3} = cowboy_client:request(<<"GET">>,
+		build_url("/long_polling", Config), Client2),
+	{ok, 102, _, Client4} = cowboy_client:response(Client3),
+	{ok, 102, _, Client5} = cowboy_client:response(Client4),
+	{error, closed} = cowboy_client:response(Client5).
+
+rest_param_all(Config) ->
+	Client = ?config(client, Config),
+	URL = build_url("/param_all", Config),
+	% Accept without param
+	{ok, Client2} = cowboy_client:request(<<"GET">>, URL,
+		[{<<"accept">>, <<"text/plain">>}], Client),
+	Client3 = check_response(Client2, <<"[]">>),
+	% Accept with param
+	{ok, Client4} = cowboy_client:request(<<"GET">>, URL,
+		[{<<"accept">>, <<"text/plain;level=1">>}], Client3),
+	Client5 = check_response(Client4, <<"level=1">>),
+	% Accept with param and quality
+	{ok, Client6} = cowboy_client:request(<<"GET">>, URL,
+		[{<<"accept">>,
+			<<"text/plain;level=1;q=0.8, text/plain;level=2;q=0.5">>}],
+		Client5),
+	Client7 = check_response(Client6, <<"level=1">>),
+	{ok, Client8} = cowboy_client:request(<<"GET">>, URL,
+		[{<<"accept">>,
+			<<"text/plain;level=1;q=0.5, text/plain;level=2;q=0.8">>}],
+		Client7),
+	Client9 = check_response(Client8, <<"level=2">>),
+	% Without Accept
+	{ok, Client10} = cowboy_client:request(<<"GET">>, URL, [], Client9),
+	Client11 = check_response(Client10, <<"'*'">>),
+	% Content-Type without param
+	{ok, Client12} = cowboy_client:request(<<"PUT">>, URL,
+		[{<<"content-type">>, <<"text/plain">>}], Client11),
+	{ok, 204, _, Client13} = cowboy_client:response(Client12),
+	% Content-Type with param
+	{ok, Client14} = cowboy_client:request(<<"PUT">>, URL,
+		[{<<"content-type">>, <<"text/plain; charset=utf-8">>}], Client13),
+	{ok, 204, _, _} = cowboy_client:response(Client14).
+
+check_response(Client, Body) ->
+	{ok, 200, _, Client2} = cowboy_client:response(Client),
+	{ok, Body, Client3} = cowboy_client:response_body(Client2),
+	Client3.
+
+rest_bad_accept(Config) ->
+	Client = ?config(client, Config),
+	{ok, Client2} = cowboy_client:request(<<"GET">>,
+		build_url("/bad_accept", Config),
+		[{<<"accept">>, <<"1">>}],
+		Client),
+	{ok, 400, _, _} = cowboy_client:response(Client2).
+
+rest_bad_content_type(Config) ->
+	Client = ?config(client, Config),
+	{ok, Client2} = cowboy_client:request(<<"PATCH">>,
+		build_url("/bad_content_type", Config),
+		[{<<"content-type">>, <<"text/plain, text/html">>}],
+		<<"Whatever">>, Client),
+	{ok, 415, _, _} = cowboy_client:response(Client2).
+
+rest_expires(Config) ->
+	Client = ?config(client, Config),
+	{ok, Client2} = cowboy_client:request(<<"GET">>,
+		build_url("/rest_expires", Config), Client),
+	{ok, 200, RespHeaders, _} = cowboy_client:response(Client2),
+	{_, Expires} = lists:keyfind(<<"expires">>, 1, RespHeaders),
+	{_, LastModified} = lists:keyfind(<<"last-modified">>, 1, RespHeaders),
+	Expires = LastModified = <<"Fri, 21 Sep 2012 22:36:14 GMT">>,
+	ok.
 
 rest_keepalive(Config) ->
 	Client = ?config(client, Config),
@@ -699,11 +933,65 @@ rest_keepalive_post_loop(Config, Client, forbidden_post, N) ->
 		= lists:keyfind(<<"connection">>, 1, RespHeaders),
 	rest_keepalive_post_loop(Config, Client3, simple_post, N - 1).
 
+rest_missing_get_callbacks(Config) ->
+	Client = ?config(client, Config),
+	{ok, Client2} = cowboy_client:request(<<"GET">>,
+		build_url("/missing_get_callbacks", Config), Client),
+	{ok, 500, _, _} = cowboy_client:response(Client2).
+
+rest_missing_put_callbacks(Config) ->
+	Client = ?config(client, Config),
+	{ok, Client2} = cowboy_client:request(<<"PUT">>,
+		build_url("/missing_put_callbacks", Config),
+		[{<<"content-type">>, <<"application/json">>}],
+		<<"{}">>, Client),
+	{ok, 500, _, _} = cowboy_client:response(Client2).
+
 rest_nodelete(Config) ->
 	Client = ?config(client, Config),
 	{ok, Client2} = cowboy_client:request(<<"DELETE">>,
 		build_url("/nodelete", Config), Client),
 	{ok, 500, _, _} = cowboy_client:response(Client2).
+
+rest_options_default(Config) ->
+	Client = ?config(client, Config),
+	{ok, Client2} = cowboy_client:request(<<"OPTIONS">>,
+		build_url("/rest_empty_resource", Config), Client),
+	{ok, 200, Headers, _} = cowboy_client:response(Client2),
+	{_, <<"HEAD, GET, OPTIONS">>} = lists:keyfind(<<"allow">>, 1, Headers).
+
+rest_patch(Config) ->
+	Tests = [
+		{204, [{<<"content-type">>, <<"text/plain">>}], <<"whatever">>},
+		{422, [{<<"content-type">>, <<"text/plain">>}], <<"false">>},
+		{400, [{<<"content-type">>, <<"text/plain">>}], <<"halt">>},
+		{415, [{<<"content-type">>, <<"application/json">>}], <<"bad_content_type">>}
+	],
+	Client = ?config(client, Config),
+	_ = [begin
+		{ok, Client2} = cowboy_client:request(<<"PATCH">>,
+			build_url("/patch", Config), Headers, Body, Client),
+		{ok, Status, _, _} = cowboy_client:response(Client2),
+		ok
+	end || {Status, Headers, Body} <- Tests].
+
+rest_post_charset(Config) ->
+	Client = ?config(client, Config),
+	Headers = [
+		{<<"content-type">>, <<"text/plain;charset=UTF-8">>}
+	],
+	{ok, Client2} = cowboy_client:request(<<"POST">>,
+		build_url("/post_charset", Config), Headers, "12345", Client),
+	{ok, 204, _, _} = cowboy_client:response(Client2).
+
+rest_postonly(Config) ->
+	Client = ?config(client, Config),
+	Headers = [
+		{<<"content-type">>, <<"text/plain">>}
+	],
+	{ok, Client2} = cowboy_client:request(<<"POST">>,
+		build_url("/postonly", Config), Headers, "12345", Client),
+	{ok, 204, _, _} = cowboy_client:response(Client2).
 
 rest_resource_get_etag(Config, Type) ->
 	rest_resource_get_etag(Config, Type, []).
@@ -745,6 +1033,17 @@ rest_resource_etags_if_none_match(Config) ->
 		{Ret, Type}
 	end || {Status, ETag, Type} <- Tests].
 
+set_env_dispatch(Config) ->
+	Client = ?config(client, Config),
+	{ok, Client2} = cowboy_client:request(<<"GET">>,
+		build_url("/", Config), Client),
+	{ok, 400, _, _} = cowboy_client:response(Client2),
+	ok = cowboy:set_env(set_env, dispatch,
+		cowboy_router:compile([{'_', [{"/", http_handler, []}]}])),
+	{ok, Client3} = cowboy_client:request(<<"GET">>,
+		build_url("/", Config), Client),
+	{ok, 200, _, _} = cowboy_client:response(Client3).
+
 set_resp_body(Config) ->
 	Client = ?config(client, Config),
 	{ok, Client2} = cowboy_client:request(<<"GET">>,
@@ -769,12 +1068,40 @@ set_resp_overwrite(Config) ->
 	{<<"server">>, <<"DesireDrive/1.0">>}
 		= lists:keyfind(<<"server">>, 1, Headers).
 
+slowloris(Config) ->
+	Client = ?config(client, Config),
+	Transport = ?config(transport, Config),
+	{ok, Client2} = cowboy_client:connect(
+		Transport, "localhost", ?config(port, Config), Client),
+	try
+		[begin
+			{ok, _} = cowboy_client:raw_request([C], Client2),
+			receive after 25 -> ok end
+		end || C <- "GET / HTTP/1.1\r\nHost: localhost\r\n"
+			"User-Agent: Mozilla/5.0 (Windows; U; Windows NT 6.0; en-US)\r\n"
+			"Cookie: name=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r\n\r\n"],
+		error(failure)
+	catch error:{badmatch, _} ->
+		ok
+	end.
+
+slowloris2(Config) ->
+	Client = ?config(client, Config),
+	Transport = ?config(transport, Config),
+	{ok, Client2} = cowboy_client:connect(
+		Transport, "localhost", ?config(port, Config), Client),
+	{ok, _} = cowboy_client:raw_request("GET / HTTP/1.1\r\n", Client2),
+	receive after 300 -> ok end,
+	{ok, _} = cowboy_client:raw_request("Host: localhost\r\n", Client2),
+	receive after 300 -> ok end,
+	{ok, 408, _, _} = cowboy_client:response(Client2).
+
 static_attribute_etag(Config) ->
 	Client = ?config(client, Config),
 	{ok, Client2} = cowboy_client:request(<<"GET">>,
-		build_url("/static_attribute_etag/test.html", Config), Client),
+		build_url("/static_attribute_etag/index.html", Config), Client),
 	{ok, Client3} = cowboy_client:request(<<"GET">>,
-		build_url("/static_attribute_etag/test.html", Config), Client2),
+		build_url("/static_attribute_etag/index.html", Config), Client2),
 	{ok, 200, Headers1, Client4} = cowboy_client:response(Client3),
 	{ok, 200, Headers2, _} = cowboy_client:response(Client4),
 	{<<"etag">>, ETag1} = lists:keyfind(<<"etag">>, 1, Headers1),
@@ -785,9 +1112,9 @@ static_attribute_etag(Config) ->
 static_function_etag(Config) ->
 	Client = ?config(client, Config),
 	{ok, Client2} = cowboy_client:request(<<"GET">>,
-		build_url("/static_function_etag/test.html", Config), Client),
+		build_url("/static_function_etag/index.html", Config), Client),
 	{ok, Client3} = cowboy_client:request(<<"GET">>,
-		build_url("/static_function_etag/test.html", Config), Client2),
+		build_url("/static_function_etag/index.html", Config), Client2),
 	{ok, 200, Headers1, Client4} = cowboy_client:response(Client3),
 	{ok, 200, Headers2, _} = cowboy_client:response(Client4),
 	{<<"etag">>, ETag1} = lists:keyfind(<<"etag">>, 1, Headers1),
@@ -808,7 +1135,7 @@ static_function_etag(Arguments, etag_data) ->
 static_mimetypes_function(Config) ->
 	Client = ?config(client, Config),
 	{ok, Client2} = cowboy_client:request(<<"GET">>,
-		build_url("/static_mimetypes_function/test.html", Config), Client),
+		build_url("/static_mimetypes_function/index.html", Config), Client),
 	{ok, 200, Headers, _} = cowboy_client:response(Client2),
 	{<<"content-type">>, <<"text/html">>}
 		= lists:keyfind(<<"content-type">>, 1, Headers).
@@ -820,7 +1147,7 @@ static_specify_file(Config) ->
 	{ok, 200, Headers, Client3} = cowboy_client:response(Client2),
 	{<<"content-type">>, <<"text/css">>}
 		= lists:keyfind(<<"content-type">>, 1, Headers),
-	{ok, <<"test_file.css\n">>, _} = cowboy_client:response_body(Client3).
+	{ok, <<"body{color:red}\n">>, _} = cowboy_client:response_body(Client3).
 
 static_specify_file_catchall(Config) ->
 	Client = ?config(client, Config),
@@ -829,12 +1156,12 @@ static_specify_file_catchall(Config) ->
 	{ok, 200, Headers, Client3} = cowboy_client:response(Client2),
 	{<<"content-type">>, <<"text/css">>}
 		= lists:keyfind(<<"content-type">>, 1, Headers),
-	{ok, <<"test_file.css\n">>, _} = cowboy_client:response_body(Client3).
+	{ok, <<"body{color:red}\n">>, _} = cowboy_client:response_body(Client3).
 
 static_test_file(Config) ->
 	Client = ?config(client, Config),
 	{ok, Client2} = cowboy_client:request(<<"GET">>,
-		build_url("/static/test_file", Config), Client),
+		build_url("/static/unknown", Config), Client),
 	{ok, 200, Headers, _} = cowboy_client:response(Client2),
 	{<<"content-type">>, <<"application/octet-stream">>}
 		= lists:keyfind(<<"content-type">>, 1, Headers).
@@ -842,7 +1169,7 @@ static_test_file(Config) ->
 static_test_file_css(Config) ->
 	Client = ?config(client, Config),
 	{ok, Client2} = cowboy_client:request(<<"GET">>,
-		build_url("/static/test_file.css", Config), Client),
+		build_url("/static/style.css", Config), Client),
 	{ok, 200, Headers, _} = cowboy_client:response(Client2),
 	{<<"content-type">>, <<"text/css">>}
 		= lists:keyfind(<<"content-type">>, 1, Headers).
@@ -855,6 +1182,61 @@ stream_body_set_resp(Config) ->
 	{ok, <<"stream_body_set_resp">>, _}
 		= cowboy_client:response_body(Client3).
 
+stream_body_set_resp_close(Config) ->
+	Client = ?config(client, Config),
+	{ok, Client2} = cowboy_client:request(<<"GET">>,
+		build_url("/stream_body/set_resp_close", Config), Client),
+	{ok, 200, _, Client3} = cowboy_client:response(Client2),
+	{ok, Transport, Socket} = cowboy_client:transport(Client3),
+	case element(7, Client3) of
+		<<"stream_body_set_resp_close">> ->
+			ok;
+		Buffer ->
+			{ok, Rest} = Transport:recv(Socket, 26 - byte_size(Buffer), 1000),
+			<<"stream_body_set_resp_close">> = << Buffer/binary, Rest/binary >>,
+			ok
+	end,
+	{error, closed} = Transport:recv(Socket, 0, 1000).
+
+stream_body_set_resp_chunked(Config) ->
+	Client = ?config(client, Config),
+	{ok, Client2} = cowboy_client:request(<<"GET">>,
+		build_url("/stream_body/set_resp_chunked", Config), Client),
+	{ok, 200, Headers, Client3} = cowboy_client:response(Client2),
+	{_, <<"chunked">>} = lists:keyfind(<<"transfer-encoding">>, 1, Headers),
+	{ok, Transport, Socket} = cowboy_client:transport(Client3),
+	case element(7, Client3) of
+		<<"B\r\nstream_body\r\n11\r\n_set_resp_chunked\r\n0\r\n\r\n">> ->
+			ok;
+		Buffer ->
+			{ok, Rest} = Transport:recv(Socket, 44 - byte_size(Buffer), 1000),
+			<<"B\r\nstream_body\r\n11\r\n_set_resp_chunked\r\n0\r\n\r\n">>
+				= <<Buffer/binary, Rest/binary>>,
+			ok
+	end.
+
+stream_body_set_resp_chunked10(Config) ->
+	Client = ?config(client, Config),
+	Transport = ?config(transport, Config),
+	{ok, Client2} = cowboy_client:connect(
+		Transport, "localhost", ?config(port, Config), Client),
+	Data = ["GET /stream_body/set_resp_chunked HTTP/1.0\r\n",
+		"Host: localhost\r\n\r\n"],
+	{ok, Client3} = cowboy_client:raw_request(Data, Client2),
+	{ok, 200, Headers, Client4} = cowboy_client:response(Client3),
+	false = lists:keymember(<<"transfer-encoding">>, 1, Headers),
+	{ok, Transport, Socket} = cowboy_client:transport(Client4),
+	case element(7, Client4) of
+		<<"stream_body_set_resp_chunked">> ->
+			ok;
+		Buffer ->
+			{ok, Rest} = Transport:recv(Socket, 28 - byte_size(Buffer), 1000),
+			<<"stream_body_set_resp_chunked">>
+				= <<Buffer/binary, Rest/binary>>,
+			ok
+	end,
+	{error, closed} = Transport:recv(Socket, 0, 1000).
+
 te_chunked(Config) ->
 	Client = ?config(client, Config),
 	Body = list_to_binary(io_lib:format("~p", [lists:seq(1, 100)])),
@@ -863,6 +1245,21 @@ te_chunked(Config) ->
 		build_url("/echo/body", Config),
 		[{<<"transfer-encoding">>, <<"chunked">>}],
 		Chunks, Client),
+	{ok, 200, _, Client3} = cowboy_client:response(Client2),
+	{ok, Body, _} = cowboy_client:response_body(Client3).
+
+te_chunked_chopped(Config) ->
+	Client = ?config(client, Config),
+	Body = list_to_binary(io_lib:format("~p", [lists:seq(1, 100)])),
+	Body2 = iolist_to_binary(body_to_chunks(50, Body, [])),
+	{ok, Client2} = cowboy_client:request(<<"GET">>,
+		build_url("/echo/body", Config),
+		[{<<"transfer-encoding">>, <<"chunked">>}], Client),
+	{ok, Transport, Socket} = cowboy_client:transport(Client2),
+	_ = [begin
+		ok = Transport:send(Socket, << C >>),
+		ok = timer:sleep(10)
+	end || << C >> <= Body2],
 	{ok, 200, _, Client3} = cowboy_client:response(Client2),
 	{ok, Body, _} = cowboy_client:response_body(Client3).
 

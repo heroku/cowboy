@@ -47,7 +47,7 @@
 	timeout = 5000 :: timeout(), %% @todo Configurable.
 	buffer = <<>> :: binary(),
 	connection = keepalive :: keepalive | close,
-	version = {1, 1} :: cowboy_http:version(),
+	version = 'HTTP/1.1' :: cowboy:http_version(),
 	response_body = undefined :: undefined | non_neg_integer()
 }).
 
@@ -118,7 +118,7 @@ request(Method, URL, Headers, Body, Client=#client{
 	raw_request(Data, Client2).
 
 request_to_iolist(Method, Headers, Body, Version, FullHost, Path) ->
-	VersionBin = cowboy_http:version_to_binary(Version),
+	VersionBin = atom_to_binary(Version, latin1),
 	%% @todo do keepalive too, allow override...
 	Headers2 = [{<<"Host">>, FullHost} | Headers],
 	ContentLength = case iolist_size(Body) of
@@ -132,11 +132,11 @@ request_to_iolist(Method, Headers, Body, Version, FullHost, Path) ->
 	 HeadersData, <<"\r\n">>, Body].
 
 parse_url(<< "https://", Rest/binary >>) ->
-	parse_url(Rest, cowboy_ssl_transport);
+	parse_url(Rest, ranch_ssl);
 parse_url(<< "http://", Rest/binary >>) ->
-	parse_url(Rest, cowboy_tcp_transport);
+	parse_url(Rest, ranch_tcp);
 parse_url(URL) ->
-	parse_url(URL, cowboy_tcp_transport).
+	parse_url(URL, ranch_tcp).
 
 parse_url(URL, Transport) ->
 	case binary:split(URL, <<"/">>) of
@@ -150,9 +150,9 @@ parse_url(URL, Transport) ->
 
 parse_peer(Peer, Transport) ->
 	case binary:split(Peer, <<":">>) of
-		[Host] when Transport =:= cowboy_tcp_transport ->
+		[Host] when Transport =:= ranch_tcp ->
 			{binary_to_list(Host), 80};
-		[Host] when Transport =:= cowboy_ssl_transport ->
+		[Host] when Transport =:= ranch_ssl ->
 			{binary_to_list(Host), 443};
 		[Host, Port] ->
 			{binary_to_list(Host), list_to_integer(binary_to_list(Port))}
@@ -197,7 +197,7 @@ stream_status(Client=#client{state=State, buffer=Buffer})
 		when State =:= request ->
 	case binary:split(Buffer, <<"\r\n">>) of
 		[Line, Rest] ->
-			parse_status(Client#client{state=response, buffer=Rest}, Line);
+			parse_version(Client#client{state=response, buffer=Rest}, Line);
 		_ ->
 			case recv(Client) of
 				{ok, Data} ->
@@ -208,11 +208,13 @@ stream_status(Client=#client{state=State, buffer=Buffer})
 			end
 	end.
 
-parse_status(Client, << "HTTP/", High, ".", Low, " ",
-		S3, S2, S1, " ", StatusStr/binary >>)
-		when High >= $0, High =< $9, Low >= $0, Low =< $9,
-			S3 >= $0, S3 =< $9, S2 >= $0, S2 =< $9, S1 >= $0, S1 =< $9 ->
-	Version = {High - $0, Low - $0},
+parse_version(Client, << "HTTP/1.1 ", Rest/binary >>) ->
+	parse_status(Client, Rest, 'HTTP/1.1');
+parse_version(Client, << "HTTP/1.0 ", Rest/binary >>) ->
+	parse_status(Client, Rest, 'HTTP/1.0').
+
+parse_status(Client, << S3, S2, S1, " ", StatusStr/binary >>, Version)
+		when S3 >= $0, S3 =< $9, S2 >= $0, S2 =< $9, S1 >= $0, S1 =< $9 ->
 	Status = (S3 - $0) * 100 + (S2 - $0) * 10 + S1 - $0,
 	{ok, Status, StatusStr, Client#client{version=Version}}.
 
