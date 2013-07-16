@@ -38,6 +38,7 @@
 -export([quoted_string/2]).
 -export([authorization/2]).
 -export([range/1]).
+-export([parameterized_tokens/1]).
 
 %% Decoding.
 -export([te_chunked/2]).
@@ -905,6 +906,49 @@ range_digits(Data, Default, Fun) ->
 			Fun(Data, Default)
 		end).
 
+%% @doc Parse a non empty list of tokens followed with optional parameters.
+-spec parameterized_tokens(binary()) -> any().
+parameterized_tokens(Data) ->
+	nonempty_list(Data,
+		fun (D, Fun) ->
+			token(D,
+				fun (_Rest, <<>>) -> {error, badarg};
+					(Rest, Token) ->
+						parameterized_tokens_params(Rest,
+							fun (Rest2, Params) ->
+								Fun(Rest2, {Token, Params})
+							end, [])
+				end)
+		end).
+
+-spec parameterized_tokens_params(binary(), fun(), [binary() | {binary(), binary()}]) -> any().
+parameterized_tokens_params(Data, Fun, Acc) ->
+	whitespace(Data,
+		fun (<< $;, Rest/binary >>) ->
+				parameterized_tokens_param(Rest,
+					fun (Rest2, Param) ->
+							parameterized_tokens_params(Rest2, Fun, [Param|Acc])
+					end);
+			(Rest) ->
+				Fun(Rest, lists:reverse(Acc))
+		end).
+
+-spec parameterized_tokens_param(binary(), fun()) -> any().
+parameterized_tokens_param(Data, Fun) ->
+	whitespace(Data,
+		fun (Rest) ->
+				token(Rest,
+					fun (_Rest2, <<>>) -> {error, badarg};
+						(<< $=, Rest2/binary >>, Attr) ->
+							word(Rest2,
+								fun (Rest3, Value) ->
+										Fun(Rest3, {Attr, Value})
+								end);
+						(Rest2, Attr) ->
+							Fun(Rest2, Attr)
+					end)
+		end).
+
 %% Decoding.
 
 %% @doc Decode a stream of chunks.
@@ -919,8 +963,17 @@ te_chunked(Data, {0, Streamed}) ->
 	%% @todo We are expecting an hex size, not a general token.
 	token(Data,
 		fun (<< "\r\n", Rest/binary >>, BinLen) ->
-				Len = list_to_integer(binary_to_list(BinLen), 16),
-				te_chunked(Rest, {Len, Streamed});
+				case list_to_integer(binary_to_list(BinLen), 16) of
+					%% Final chunk is parsed in one go above. Rest would be
+					%% <<\r\n">> if complete.
+					0 when byte_size(Rest) < 2 ->
+						more;
+					%% Normal chunk. Add 2 to Len for trailing <<"\r\n">>. Note
+					%% that repeated <<"-2\r\n">> would be streamed, and
+					%% accumulated, until out of memory if Len could be -2.
+					Len when Len > 0 ->
+						te_chunked(Rest, {Len + 2, Streamed})
+				end;
 			%% Chunk size shouldn't take too many bytes,
 			%% don't try to stream forever.
 			(Rest, _) when byte_size(Rest) < 16 ->
@@ -928,11 +981,28 @@ te_chunked(Data, {0, Streamed}) ->
 			(_, _) ->
 				{error, badarg}
 		end);
-te_chunked(Data, {ChunkRem, Streamed}) when byte_size(Data) >= ChunkRem + 2 ->
-	<< Chunk:ChunkRem/binary, "\r\n", Rest/binary >> = Data,
-	{ok, Chunk, Rest, {0, Streamed + byte_size(Chunk)}};
+%% <<"\n">> from trailing <<"\r\n">>.
+te_chunked(<< "\n", Rest/binary>>, {1, Streamed}) ->
+	{ok, <<>>, Rest, {0, Streamed}};
+te_chunked(<<>>, State={1, _Streamed}) ->
+	{more, 1, <<>>, State};
+%% Remainder of chunk (if any) and as much of trailing <<"\r\n">> as possible.
+te_chunked(Data, {ChunkRem, Streamed}) when byte_size(Data) >= ChunkRem - 2 ->
+	ChunkSize = ChunkRem - 2,
+	Streamed2 = Streamed + ChunkSize,
+	case Data of
+		<< Chunk:ChunkSize/binary, "\r\n", Rest/binary >> ->
+			{ok, Chunk, Rest, {0, Streamed2}};
+		<< Chunk:ChunkSize/binary, "\r" >> ->
+			{more, 1, Chunk, {1, Streamed2}};
+		<< Chunk:ChunkSize/binary >> ->
+			{more, 2, Chunk, {2, Streamed2}}
+	end;
+%% Incomplete chunk.
 te_chunked(Data, {ChunkRem, Streamed}) ->
-	{more, ChunkRem + 2, Data, {ChunkRem, Streamed}}.
+	ChunkRem2 = ChunkRem - byte_size(Data),
+	Streamed2 = Streamed + byte_size(Data),
+	{more, ChunkRem2, Data, {ChunkRem2, Streamed2}}.
 
 %% @doc Decode an identity stream.
 -spec te_identity(Bin, TransferState)
@@ -1289,6 +1359,17 @@ content_type_test_() ->
 			]}}
 	],
 	[{V, fun () -> R = content_type(V) end} || {V, R} <- Tests].
+
+parameterized_tokens_test_() ->
+	%% {ParameterizedTokens, Result}
+	Tests = [
+		{<<"foo">>, [{<<"foo">>, []}]},
+		{<<"bar; baz=2">>, [{<<"bar">>, [{<<"baz">>, <<"2">>}]}]},
+		{<<"bar; baz=2;bat">>, [{<<"bar">>, [{<<"baz">>, <<"2">>}, <<"bat">>]}]},
+		{<<"bar; baz=2;bat=\"z=1,2;3\"">>, [{<<"bar">>, [{<<"baz">>, <<"2">>}, {<<"bat">>, <<"z=1,2;3">>}]}]},
+		{<<"foo, bar; baz=2">>, [{<<"foo">>, []}, {<<"bar">>, [{<<"baz">>, <<"2">>}]}]}
+	],
+	[{V, fun () -> R = parameterized_tokens(V) end} || {V, R} <- Tests].
 
 digits_test_() ->
 	%% {Digits, Result}

@@ -88,6 +88,8 @@
 -export([te_chunked/1]).
 -export([te_chunked_chopped/1]).
 -export([te_chunked_delayed/1]).
+-export([te_chunked_split_body/1]).
+-export([te_chunked_split_crlf/1]).
 -export([te_identity/1]).
 
 %% ct.
@@ -162,6 +164,8 @@ groups() ->
 		te_chunked,
 		te_chunked_chopped,
 		te_chunked_delayed,
+		te_chunked_split_body,
+		te_chunked_split_crlf,
 		te_identity
 	],
 	[
@@ -216,6 +220,7 @@ init_per_group(https, Config) ->
 	Transport = ranch_ssl,
 	{_, Cert, Key} = ct_helper:make_certs(),
 	Opts = [{cert, Cert}, {key, Key}],
+	application:start(asn1),
 	application:start(public_key),
 	application:start(ssl),
 	{ok, _} = cowboy:start_https(https, 100, Opts ++ [{port, 0}], [
@@ -243,6 +248,7 @@ init_per_group(https_compress, Config) ->
 	Transport = ranch_ssl,
 	{_, Cert, Key} = ct_helper:make_certs(),
 	Opts = [{cert, Cert}, {key, Key}],
+	application:start(asn1),
 	application:start(public_key),
 	application:start(ssl),
 	{ok, _} = cowboy:start_https(https_compress, 100, Opts ++ [{port, 0}], [
@@ -307,6 +313,7 @@ end_per_group(Name, _) when Name =:= https; Name =:= https_compress ->
 	cowboy:stop_listener(Name),
 	application:stop(ssl),
 	application:stop(public_key),
+	application:stop(asn1),
 	ok;
 end_per_group(Name, _) ->
 	cowboy:stop_listener(Name),
@@ -517,7 +524,7 @@ chunked_response(Config) ->
 %% Check if sending requests whose size is around the MTU breaks something.
 echo_body(Config) ->
 	Client = ?config(client, Config),
-	{ok, [{mtu, MTU}]} = inet:ifget("lo", [mtu]),
+	MTU = ct_helper:get_loopback_mtu(),
 	_ = [begin
 		Body = list_to_binary(lists:duplicate(Size, $a)),
 		{ok, Client2} = cowboy_client:request(<<"POST">>,
@@ -1274,6 +1281,52 @@ te_chunked_delayed(Config) ->
 	_ = [begin
 		ok = Transport:send(Socket, Chunk),
 		ok = timer:sleep(10)
+	end || Chunk <- Chunks],
+	{ok, 200, _, Client3} = cowboy_client:response(Client2),
+	{ok, Body, _} = cowboy_client:response_body(Client3).
+
+te_chunked_split_body(Config) ->
+	Client = ?config(client, Config),
+	Body = list_to_binary(io_lib:format("~p", [lists:seq(1, 100)])),
+	Chunks = body_to_chunks(50, Body, []),
+	{ok, Client2} = cowboy_client:request(<<"GET">>,
+		build_url("/echo/body", Config),
+		[{<<"transfer-encoding">>, <<"chunked">>}], Client),
+	{ok, Transport, Socket} = cowboy_client:transport(Client2),
+	_ = [begin
+		case Chunk of
+			%% Final chunk.
+			<<"0\r\n\r\n">> ->
+				ok = Transport:send(Socket, Chunk);
+			_ ->
+				%% Chunk of form <<"9\r\nChunkBody\r\n">>.
+				[Size, ChunkBody, <<>>] =
+					binary:split(Chunk, [<<"\r\n">>], [global]),
+				PartASize = random:uniform(byte_size(ChunkBody)),
+				<<PartA:PartASize/binary, PartB/binary>> = ChunkBody,
+				ok = Transport:send(Socket, [Size, <<"\r\n">>, PartA]),
+				ok = timer:sleep(10),
+				ok = Transport:send(Socket, [PartB, <<"\r\n">>])
+		end
+	end || Chunk <- Chunks],
+	{ok, 200, _, Client3} = cowboy_client:response(Client2),
+	{ok, Body, _} = cowboy_client:response_body(Client3).
+
+te_chunked_split_crlf(Config) ->
+	Client = ?config(client, Config),
+	Body = list_to_binary(io_lib:format("~p", [lists:seq(1, 100)])),
+	Chunks = body_to_chunks(50, Body, []),
+	{ok, Client2} = cowboy_client:request(<<"GET">>,
+		build_url("/echo/body", Config),
+		[{<<"transfer-encoding">>, <<"chunked">>}], Client),
+	{ok, Transport, Socket} = cowboy_client:transport(Client2),
+	_ = [begin
+		%% <<"\r\n">> is last 2 bytes of Chunk split before or after <<"\r">>.
+		Len = byte_size(Chunk) - (random:uniform(2) - 1),
+		<<Chunk2:Len/binary, End/binary>> = Chunk,
+		ok = Transport:send(Socket, Chunk2),
+		ok = timer:sleep(10),
+		ok = Transport:send(Socket, End)
 	end || Chunk <- Chunks],
 	{ok, 200, _, Client3} = cowboy_client:response(Client2),
 	{ok, Body, _} = cowboy_client:response_body(Client3).

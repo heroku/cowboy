@@ -460,6 +460,8 @@ parse_header(Name, Req, Default)
 		fun (Value) ->
 			cowboy_http:nonempty_list(Value, fun cowboy_http:token_ci/2)
 		end);
+parse_header(Name = <<"sec-websocket-extensions">>, Req, Default) ->
+	parse_header(Name, Req, Default, fun cowboy_http:parameterized_tokens/1);
 parse_header(Name, Req, Default) ->
 	{Value, Req2} = header(Name, Req, Default),
 	{undefined, Value, Req2}.
@@ -1021,31 +1023,36 @@ reply(Status, Headers, Body, Req=#http_req{
 reply_may_compress(Status, Headers, Body, Req,
 		RespHeaders, HTTP11Headers, Method) ->
 	BodySize = iolist_size(Body),
-	{ok, Encodings, Req2} = parse_header(<<"accept-encoding">>, Req),
-	CanGzip = (BodySize > 300)
-		andalso (false =:= lists:keyfind(<<"content-encoding">>,
-			1, Headers))
-		andalso (false =:= lists:keyfind(<<"content-encoding">>,
-			1, RespHeaders))
-		andalso (false =:= lists:keyfind(<<"transfer-encoding">>,
-			1, Headers))
-		andalso (false =:= lists:keyfind(<<"transfer-encoding">>,
-			1, RespHeaders))
-		andalso (Encodings =/= undefined)
-		andalso (false =/= lists:keyfind(<<"gzip">>, 1, Encodings)),
-	case CanGzip of
-		true ->
-			GzBody = zlib:gzip(Body),
-			{_, Req3} = response(Status, Headers, RespHeaders, [
-					{<<"content-length">>, integer_to_list(byte_size(GzBody))},
-					{<<"content-encoding">>, <<"gzip">>},
-					{<<"date">>, cowboy_clock:rfc1123()},
-					{<<"server">>, <<"Cowboy">>}
-				|HTTP11Headers],
-				case Method of <<"HEAD">> -> <<>>; _ -> GzBody end,
-				Req2),
-			Req3;
-		false ->
+	case parse_header(<<"accept-encoding">>, Req) of
+		{ok, Encodings, Req2} ->
+			CanGzip = (BodySize > 300)
+				andalso (false =:= lists:keyfind(<<"content-encoding">>,
+					1, Headers))
+				andalso (false =:= lists:keyfind(<<"content-encoding">>,
+					1, RespHeaders))
+				andalso (false =:= lists:keyfind(<<"transfer-encoding">>,
+					1, Headers))
+				andalso (false =:= lists:keyfind(<<"transfer-encoding">>,
+					1, RespHeaders))
+				andalso (Encodings =/= undefined)
+				andalso (false =/= lists:keyfind(<<"gzip">>, 1, Encodings)),
+			case CanGzip of
+				true ->
+					GzBody = zlib:gzip(Body),
+					{_, Req3} = response(Status, Headers, RespHeaders, [
+							{<<"content-length">>, integer_to_list(byte_size(GzBody))},
+							{<<"content-encoding">>, <<"gzip">>},
+							{<<"date">>, cowboy_clock:rfc1123()},
+							{<<"server">>, <<"Cowboy">>}
+						|HTTP11Headers],
+						case Method of <<"HEAD">> -> <<>>; _ -> GzBody end,
+						Req2),
+					Req3;
+				false ->
+					reply_no_compress(Status, Headers, Body, Req,
+						RespHeaders, HTTP11Headers, Method, BodySize)
+			end;
+		{error, badarg} ->
 			reply_no_compress(Status, Headers, Body, Req,
 				RespHeaders, HTTP11Headers, Method, BodySize)
 	end.
@@ -1168,6 +1175,7 @@ g(port, #http_req{port=Ret}) -> Ret;
 g(qs, #http_req{qs=Ret}) -> Ret;
 g(qs_vals, #http_req{qs_vals=Ret}) -> Ret;
 g(resp_body, #http_req{resp_body=Ret}) -> Ret;
+g(resp_compress, #http_req{resp_compress=Ret}) -> Ret;
 g(resp_headers, #http_req{resp_headers=Ret}) -> Ret;
 g(resp_state, #http_req{resp_state=Ret}) -> Ret;
 g(socket, #http_req{socket=Ret}) -> Ret;
