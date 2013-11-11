@@ -23,6 +23,7 @@
 -export([close/1]).
 
 -export([connect/4]).
+-export([connect/5]).
 -export([raw_request/2]).
 -export([request/3]).
 -export([request/4]).
@@ -70,6 +71,9 @@ close(#client{socket=undefined}) ->
 	{error, notconnected};
 close(#client{transport=Transport, socket=Socket}) ->
 	Transport:close(Socket).
+
+connect(Transport, Host, Port, Timeout, Client) ->
+	connect(Transport, Host, Port, Client#client{connect_timeout=Timeout}).
 
 connect(Transport, Host, Port, Client)
 		when is_binary(Host) ->
