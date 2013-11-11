@@ -44,6 +44,7 @@
 	opts = [] :: [any()],
 	socket = undefined :: undefined | inet:socket(),
 	transport = undefined :: module(),
+	connect_timeout = 3100 :: timeout(), %% @todo Configurable.
 	read_timeout = 5000 :: timeout(), %% @todo Configurable.
 	buffer = <<>> :: binary(),
 	connection = keepalive :: keepalive | close,
@@ -73,11 +74,12 @@ close(#client{transport=Transport, socket=Socket}) ->
 connect(Transport, Host, Port, Client)
 		when is_binary(Host) ->
 	connect(Transport, binary_to_list(Host), Port, Client);
-connect(Transport, Host, Port, Client=#client{state=wait, opts=Opts})
+connect(Transport, Host, Port,
+		Client=#client{state=wait, opts=Opts, connect_timeout=Timeout})
 		when is_atom(Transport),
 			(is_list(Host) orelse is_tuple(Host)),
 			is_integer(Port) ->
-	case Transport:connect(Host, Port, Opts) of
+	case Transport:connect(Host, Port, Opts, Timeout) of
 		{ok, Socket} ->
 			{ok, Client#client{state=request,
 							   socket=Socket,
