@@ -74,7 +74,8 @@ connect(Transport, Host, Port, Client)
 		when is_binary(Host) ->
 	connect(Transport, binary_to_list(Host), Port, Client);
 connect(Transport, Host, Port, Client=#client{state=wait, opts=Opts})
-		when is_atom(Transport), is_list(Host),
+		when is_atom(Transport),
+			(is_list(Host) orelse is_tuple(Host)),
 			is_integer(Port) ->
 	case Transport:connect(Host, Port, Opts) of
 		{ok, Socket} ->
