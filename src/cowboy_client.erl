@@ -44,7 +44,7 @@
 	opts = [] :: [any()],
 	socket = undefined :: undefined | inet:socket(),
 	transport = undefined :: module(),
-	timeout = 5000 :: timeout(), %% @todo Configurable.
+	read_timeout = 5000 :: timeout(), %% @todo Configurable.
 	buffer = <<>> :: binary(),
 	connection = keepalive :: keepalive | close,
 	version = 'HTTP/1.1' :: cowboy:http_version(),
@@ -292,7 +292,7 @@ stream_body(Client=#client{state=response_body, buffer=Buffer,
 			{ok, Body, Client#client{buffer=Rest, response_body=undefined}}
 	end.
 
-recv(#client{socket=Socket, transport=Transport, timeout=Timeout}) ->
+recv(#client{socket=Socket, transport=Transport, read_timeout=Timeout}) ->
 	Transport:recv(Socket, 0, Timeout).
 
 auth_header("") ->
