@@ -114,6 +114,7 @@
 -export([compact/1]).
 -export([lock/1]).
 -export([to_list/1]).
+-export([raw_socket/1]).
 
 -type cookie_opts() :: cow_cookie:cookie_opts().
 -export_type([cookie_opts/0]).
@@ -1251,6 +1252,21 @@ lock(Req) ->
 -spec to_list(req()) -> [{atom(), any()}].
 to_list(Req) ->
 	lists:zip(record_info(fields, http_req), tl(tuple_to_list(Req))).
+
+%% @doc Gives away a raw socket and the transport to communicate with it, along
+%% with the new `Req' object that is being marked as 'done' so that returning
+%% the `Req' object in the callback module doesn't attempt to send more data
+%% over the connection.
+%%
+%% This function should be called only once the user knows they do not want
+%% to use cowboy to send or read data through the cowboy API anymore for this
+%% request.
+-spec raw_socket(Req) -> {{Transport, Socket}, Req} when
+	Transport :: module(),
+	Socket :: any(),
+	Req :: req().
+raw_socket(Req=#http_req{socket=S, transport=T}) ->
+	{{T,S}, Req#http_req{resp_state=done}}.
 
 %% Internal.
 
