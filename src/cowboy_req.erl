@@ -1261,12 +1261,13 @@ to_list(Req) ->
 %% This function should be called only once the user knows they do not want
 %% to use cowboy to send or read data through the cowboy API anymore for this
 %% request.
--spec raw_socket(Req) -> {{Transport, Socket}, Req} when
+-spec raw_socket(Req) -> {{Transport, Socket}, Buffer, Req} when
 	Transport :: module(),
 	Socket :: any(),
+	Buffer :: iodata(),
 	Req :: req().
-raw_socket(Req=#http_req{socket=S, transport=T}) ->
-	{{T,S}, Req#http_req{resp_state=done}}.
+raw_socket(Req=#http_req{socket=S, transport=T, buffer=Buf}) ->
+	{{T,S}, Buf, Req#http_req{resp_state=done, buffer = <<>>}}.
 
 %% Internal.
 
