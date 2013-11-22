@@ -115,6 +115,7 @@
 -export([lock/1]).
 -export([to_list/1]).
 -export([raw_socket/1]).
+-export([raw_socket/2]).
 
 -type cookie_opts() :: cow_cookie:cookie_opts().
 -export_type([cookie_opts/0]).
@@ -1261,13 +1262,23 @@ to_list(Req) ->
 %% This function should be called only once the user knows they do not want
 %% to use cowboy to send or read data through the cowboy API anymore for this
 %% request.
--spec raw_socket(Req) -> {{Transport, Socket}, Buffer, Req} when
+-spec raw_socket(Req) -> {{Transport, Socket}, Req} when
+	Transport :: module(),
+	Socket :: any(),
+	Req :: req().
+raw_socket(Req) -> raw_socket(Req, []).
+
+-spec raw_socket(Req, Opts) -> {{Transport, Socket}, Buffer, Req}
+                             | {{Transport, Socket}, Req} when
 	Transport :: module(),
 	Socket :: any(),
 	Buffer :: iodata(),
+	Opts :: [no_buffer],
 	Req :: req().
-raw_socket(Req=#http_req{socket=S, transport=T, buffer=Buf}) ->
-	{{T,S}, Buf, Req#http_req{resp_state=done, buffer = <<>>}}.
+raw_socket(Req=#http_req{socket=S, transport=T, buffer=Buf}, []) ->
+	{{T,S}, Buf, Req#http_req{resp_state=done, buffer = <<>>}};
+raw_socket(Req=#http_req{socket=S, transport=T}, [no_buffer]) ->
+	{{T,S}, Req#http_req{resp_state=done}}.
 
 %% Internal.
 
