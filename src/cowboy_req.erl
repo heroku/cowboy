@@ -116,7 +116,7 @@
 -export([lock/1]).
 -export([to_list/1]).
 -export([raw_socket/1]).
--export([raw_socket/2]).
+-export([raw_sockbuf/1]).
 
 -type cookie_opts() :: cow_cookie:cookie_opts().
 -export_type([cookie_opts/0]).
@@ -1289,19 +1289,17 @@ to_list(Req) ->
 	Transport :: module(),
 	Socket :: any(),
 	Req :: req().
-raw_socket(Req) -> raw_socket(Req, []).
+raw_socket(Req=#http_req{socket=S, transport=T}) ->
+	{{T,S}, Req#http_req{resp_state=done}}.
 
--spec raw_socket(Req, Opts) -> {{Transport, Socket}, Buffer, Req}
-                             | {{Transport, Socket}, Req} when
+-spec raw_sockbuf(Req) -> {{Transport, Socket}, Buffer, Req}
+  when
 	Transport :: module(),
 	Socket :: any(),
 	Buffer :: iodata(),
-	Opts :: [no_buffer],
 	Req :: req().
-raw_socket(Req=#http_req{socket=S, transport=T, buffer=Buf}, []) ->
-	{{T,S}, Buf, Req#http_req{resp_state=done, buffer = <<>>}};
-raw_socket(Req=#http_req{socket=S, transport=T}, [no_buffer]) ->
-	{{T,S}, Req#http_req{resp_state=done}}.
+raw_sockbuf(Req=#http_req{socket=S, transport=T, buffer=Buf}) ->
+	{{T,S}, Buf, Req#http_req{resp_state=done, buffer = <<>>}}.
 
 %% Internal.
 
