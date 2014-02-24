@@ -205,7 +205,9 @@ parse_method(<< C, Rest/bits >>, State, SoFar) ->
 		$\r -> error_terminate(400, State);
 		$\s -> parse_uri(Rest, State, SoFar);
 		_ -> parse_method(Rest, State, << SoFar/binary, C >>)
-	end.
+	end;
+parse_method(<<>>, State, SoFar) ->
+	crash_terminate(State, {parse_method, empty_buffer}, SoFar).
 
 parse_uri(<< $\r, _/bits >>, State, _) ->
 	error_terminate(400, State);
@@ -223,7 +225,9 @@ parse_uri_skip_host(<< C, Rest/bits >>, State, Method) ->
 		$\r -> error_terminate(400, State);
 		$/ -> parse_uri_path(Rest, State, Method, <<"/">>);
 		_ -> parse_uri_skip_host(Rest, State, Method)
-	end.
+	end;
+parse_uri_skip_host(<<>>, State, SoFar) ->
+	crash_terminate(State, {parse_uri_skip_host, empty_buffer}, SoFar).
 
 parse_uri_path(<< C, Rest/bits >>, State, Method, SoFar) ->
 	case C of
@@ -232,7 +236,9 @@ parse_uri_path(<< C, Rest/bits >>, State, Method, SoFar) ->
 		$? -> parse_uri_query(Rest, State, Method, SoFar, <<>>);
 		$# -> skip_uri_fragment(Rest, State, Method, SoFar, <<>>);
 		_ -> parse_uri_path(Rest, State, Method, << SoFar/binary, C >>)
-	end.
+	end;
+parse_uri_path(<<>>, State, Method, SoFar) ->
+	crash_terminate(State, {parse_uri_path, empty_buffer}, [Method,SoFar]).
 
 parse_uri_query(<< C, Rest/bits >>, S, M, P, SoFar) ->
 	case C of
@@ -240,14 +246,18 @@ parse_uri_query(<< C, Rest/bits >>, S, M, P, SoFar) ->
 		$\s -> parse_version(Rest, S, M, P, SoFar);
 		$# -> skip_uri_fragment(Rest, S, M, P, SoFar);
 		_ -> parse_uri_query(Rest, S, M, P, << SoFar/binary, C >>)
-	end.
+	end;
+parse_uri_query(<<>>, State, Method, Path, SoFar) ->
+	crash_terminate(State, {parse_uri_query, empty_buffer}, [Method, Path, SoFar]).
 
 skip_uri_fragment(<< C, Rest/bits >>, S, M, P, Q) ->
 	case C of
 		$\r -> error_terminate(400, S);
 		$\s -> parse_version(Rest, S, M, P, Q);
 		_ -> skip_uri_fragment(Rest, S, M, P, Q)
-	end.
+	end;
+skip_uri_fragment(<<>>, State, Method, Path, SoFar) ->
+	crash_terminate(State, {skip_uri_fragment, empty_buffer}, [Method, Path, SoFar]).
 
 parse_version(<< "HTTP/1.1\r\n", Rest/bits >>, S, M, P, Q) ->
 	parse_header(Rest, S, M, P, Q, 'HTTP/1.1', []);
@@ -591,7 +601,13 @@ error_terminate(Status, Req, State) ->
 	cowboy_req:maybe_reply(Status, Req),
 	terminate(State).
 
+-spec crash_terminate(#state{}, term(), SoFar::binary()) -> ok.
+crash_terminate(State=#state{}, Term, SoFar) ->
+	terminate(State),
+    error({Term, binary_to_list(iolist_to_binary(SoFar))}).
+
 -spec terminate(#state{}) -> ok.
 terminate(#state{socket=Socket, transport=Transport}) ->
 	Transport:close(Socket),
 	ok.
+
