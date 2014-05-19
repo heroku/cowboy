@@ -18,6 +18,7 @@
 -export([init/1]).
 -export([state/1]).
 -export([transport/1]).
+-export([close/1]).
 
 -export([connect/4]).
 -export([raw_request/2]).
@@ -32,6 +33,10 @@
 -export([stream_header/1]).
 -export([stream_body/1]).
 
+-export([request_to_iolist/6]).
+-export([auth_header/1]).
+
+
 -record(client, {
 	state = wait :: wait | request | response | response_body,
 	opts = [] :: [any()],
@@ -44,6 +49,9 @@
 	response_body = undefined :: undefined | non_neg_integer()
 }).
 
+-opaque client() :: #client{}.
+-export_type([client/0]).
+
 init(Opts) ->
 	{ok, #client{opts=Opts}}.
 
@@ -55,24 +63,36 @@ transport(#client{socket=undefined}) ->
 transport(#client{transport=Transport, socket=Socket}) ->
 	{ok, Transport, Socket}.
 
+close(#client{socket=undefined}) ->
+	{error, notconnected};
+close(#client{transport=Transport, socket=Socket}) ->
+	Transport:close(Socket).
+
 connect(Transport, Host, Port, Client)
 		when is_binary(Host) ->
 	connect(Transport, binary_to_list(Host), Port, Client);
-connect(Transport, Host, Port, Client=#client{state=State, opts=Opts})
+connect(Transport, Host, Port, Client=#client{state=wait, opts=Opts})
 		when is_atom(Transport), is_list(Host),
-			is_integer(Port), is_record(Client, client),
-			State =:= wait ->
-	{ok, Socket} = Transport:connect(Host, Port, Opts),
-	{ok, Client#client{state=request, socket=Socket, transport=Transport}}.
+			is_integer(Port) ->
+	case Transport:connect(Host, Port, Opts) of
+		{ok, Socket} ->
+			{ok, Client#client{state=request,
+							   socket=Socket,
+							   transport=Transport}};
+		{error, _} = Err -> Err
+	end.
 
 raw_request(Data, Client=#client{state=response_body}) ->
 	{done, Client2} = skip_body(Client),
 	raw_request(Data, Client2);
 raw_request(Data, Client=#client{
-		state=State, socket=Socket, transport=Transport})
-		when State =:= request ->
-	ok = Transport:send(Socket, Data),
-	{ok, Client}.
+		state=request, socket=Socket, transport=Transport}) ->
+	case Transport:send(Socket, Data) of
+		ok ->
+			{ok, Client};
+		{error, _} = Err ->
+			Err
+	end.
 
 request(Method, URL, Client) ->
 	request(Method, URL, [], <<>>, Client).
@@ -91,6 +111,11 @@ request(Method, URL, Headers, Body, Client=#client{
 		wait -> connect(Transport, Host, Port, Client);
 		request -> {ok, Client}
 	end,
+	Data = request_to_iolist(Method, Headers, Body, Version, FullHost,
+	                         Path),
+	raw_request(Data, Client2).
+
+request_to_iolist(Method, Headers, Body, Version, FullHost, Path) ->
 	VersionBin = atom_to_binary(Version, latin1),
 	%% @todo do keepalive too, allow override...
 	Headers2 = case lists:keyfind(<<"host">>, 1, Headers) of
@@ -106,9 +131,8 @@ request(Method, URL, Headers, Body, Client=#client{
 	end,
 	HeadersData = [[Name, <<": ">>, Value, <<"\r\n">>]
 		|| {Name, Value} <- Headers4],
-	Data = [Method, <<" ">>, Path, <<" ">>, VersionBin, <<"\r\n">>,
-		HeadersData, <<"\r\n">>, Body],
-	raw_request(Data, Client2).
+	[Method, <<" ">>, Path, <<" ">>, VersionBin, <<"\r\n">>,
+		HeadersData, <<"\r\n">>, Body].
 
 parse_url(<< "https://", Rest/binary >>) ->
 	parse_url(Rest, ranch_ssl);
@@ -273,3 +297,23 @@ stream_body(Client=#client{state=response_body, buffer=Buffer,
 
 recv(#client{socket=Socket, transport=Transport, timeout=Timeout}) ->
 	Transport:recv(Socket, 0, Timeout).
+
+auth_header("") ->
+	[];
+auth_header(AuthInfo) when is_list(AuthInfo) ->
+	[{<<"Authorization">>,
+	  case string:tokens(AuthInfo, ":") of
+		  [User, Pass] ->
+			  encode_auth_header(User, Pass);
+		  [User] ->
+			  encode_auth_header(User)
+	  end}].
+
+%% @private
+encode_auth_header(User) ->
+	encode_auth_header(User, "").
+
+%% @private
+encode_auth_header(User, Pass)
+  when is_list(User), is_list(Pass) ->
+	["Basic ", base64:encode(User ++ ":" ++ Pass)].

@@ -336,7 +336,8 @@ parse_hd_name_ws(<< C, Rest/bits >>, S, M, P, Q, V, H, Name) ->
 	case C of
 		$\s -> parse_hd_name_ws(Rest, S, M, P, Q, V, H, Name);
 		$\t -> parse_hd_name_ws(Rest, S, M, P, Q, V, H, Name);
-		$: -> parse_hd_before_value(Rest, S, M, P, Q, V, H, Name)
+		$: -> parse_hd_before_value(Rest, S, M, P, Q, V, H, Name);
+		_ -> error_terminate(400, S)
 	end.
 
 wait_hd_before_value(Buffer, State=#state{
@@ -415,7 +416,9 @@ parse_hd_value(<<>>, State=#state{max_header_value_length=MaxLength},
 		_, _, _, _, _, _, SoFar) when byte_size(SoFar) > MaxLength ->
 	error_terminate(400, State);
 parse_hd_value(<<>>, S, M, P, Q, V, H, N, SoFar) ->
-	wait_hd_value(<<>>, S, M, P, Q, V, H, N, SoFar).
+        wait_hd_value(<<>>, S, M, P, Q, V, H, N, SoFar);
+parse_hd_value(_, State, _M, _P, _Q, _V, _H, _N, _SoFar) ->
+        error_terminate(400, State).
 
 request(B, State=#state{transport=Transport}, M, P, Q, Version, Headers) ->
 	case lists:keyfind(<<"host">>, 1, Headers) of
@@ -425,15 +428,15 @@ request(B, State=#state{transport=Transport}, M, P, Q, Version, Headers) ->
 			request(B, State, M, P, Q, Version, Headers,
 				<<>>, default_port(Transport:name()));
 		{_, RawHost} ->
-			case catch parse_host(RawHost, false, <<>>) of
-				{'EXIT', _} ->
-					error_terminate(400, State);
+			try parse_host(RawHost, false, <<>>) of
 				{Host, undefined} ->
 					request(B, State, M, P, Q, Version, Headers,
 						Host, default_port(Transport:name()));
 				{Host, Port} ->
 					request(B, State, M, P, Q, Version, Headers,
 						Host, Port)
+			catch _:_ ->
+				error_terminate(400, State)
 			end
 	end.
 
