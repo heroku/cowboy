@@ -62,6 +62,9 @@
 -export([header/2]).
 -export([header/3]).
 -export([headers/1]).
+-export([keyed_header/2]).
+-export([keyed_header/3]).
+-export([keyed_headers/1]).
 -export([parse_header/2]).
 -export([parse_header/3]).
 -export([cookie/2]).
@@ -213,11 +216,11 @@ new(Socket, Transport, Peer, Method, Path, Query,
 						'HTTP/1.1' -> Req; %% keepalive
 						'HTTP/1.0' -> Req#http_req{connection=close}
 					end;
-				{_, ConnectionHeader} ->
+				{_, _, ConnectionHeader} ->
 					Tokens = parse_connection_before(ConnectionHeader, []),
 					Connection = connection_to_atom(Tokens),
 					Req#http_req{connection=Connection,
-						p_headers=[{<<"connection">>, Tokens}]}
+						p_headers=[{<<"connection">>, <<"Connection">>, Tokens}]}
 			end
 	end.
 
@@ -366,16 +369,33 @@ header(Name, Req) ->
 %% @doc Return the header value for the given key, or a default if missing.
 -spec header(binary(), Req, Default)
 	-> {binary() | Default, Req} when Req::req(), Default::any().
-header(Name, Req, Default) ->
-	case lists:keyfind(Name, 1, Req#http_req.headers) of
-		{Name, Value} -> {Value, Req};
+header(Key, Req, Default) ->
+	case lists:keyfind(Key, 1, Req#http_req.headers) of
+		{Key, _Name, Value} -> {Value, Req};
 		false -> {Default, Req}
+	end.
+
+-spec keyed_header(binary(), Req) ->
+    {{binary(), binary()} | undefined, Req} when Req::req().
+keyed_header(Key, Req) ->
+	keyed_header(Key, Req, undefined).
+
+-spec keyed_header(binary(), Req, Default)
+    -> {binary(), binary() | Default, Req} when Req::req(), Default::any().
+keyed_header(Key, Req, Default) ->
+	case lists:keyfind(Key, 1, Req#http_req.headers) of
+		{Key, Name, Value} -> {Name, Value, Req};
+		false -> {Key, Default, Req}
 	end.
 
 %% @doc Return the full list of headers.
 -spec headers(Req) -> {cowboy:http_headers(), Req} when Req::req().
 headers(Req) ->
-	{Req#http_req.headers, Req}.
+	{[{Key,Val} || {Key,_Name,Val} <- Req#http_req.headers], Req}.
+
+-spec keyed_headers(Req) -> {cowboy:http_keyed_headers(), Req} when Req::req().
+keyed_headers(Req) ->
+    {Req#http_req.headers, Req}.
 
 %% @doc Semantically parse headers.
 %%
@@ -385,10 +405,10 @@ headers(Req) ->
 -spec parse_header(binary(), Req)
 	-> {ok, any(), Req} | {undefined, binary(), Req}
 	| {error, badarg} when Req::req().
-parse_header(Name, Req=#http_req{p_headers=PHeaders}) ->
-	case lists:keyfind(Name, 1, PHeaders) of
-		false -> parse_header(Name, Req, parse_header_default(Name));
-		{Name, Value} -> {ok, Value, Req}
+parse_header(Key, Req=#http_req{p_headers=PHeaders}) ->
+	case lists:keyfind(Key, 1, PHeaders) of
+		false -> parse_header(Key, Req, parse_header_default(Key));
+		{Key, _Name, Value} -> {ok, Value, Req}
 	end.
 
 %% @doc Default values for semantic header parsing.
@@ -469,16 +489,16 @@ parse_header(Name, Req, Default) ->
 	{Value, Req2} = header(Name, Req, Default),
 	{undefined, Value, Req2}.
 
-parse_header(Name, Req=#http_req{p_headers=PHeaders}, Default, Fun) ->
-	case header(Name, Req) of
-		{undefined, Req2} ->
-			{ok, Default, Req2#http_req{p_headers=[{Name, Default}|PHeaders]}};
-		{Value, Req2} ->
+parse_header(Key, Req=#http_req{p_headers=PHeaders}, Default, Fun) ->
+	case keyed_header(Key, Req) of
+		{Key, undefined, Req2} ->
+			{ok, Default, Req2#http_req{p_headers=[{Key, Key, Default}|PHeaders]}};
+		{Name, Value, Req2} ->
 			case Fun(Value) of
 				{error, badarg} ->
 					{error, badarg};
 				P ->
-					{ok, P, Req2#http_req{p_headers=[{Name, P}|PHeaders]}}
+					{ok, P, Req2#http_req{p_headers=[{Key, Name, P}|PHeaders]}}
 			end
 	end.
 
@@ -552,11 +572,11 @@ set_meta(Name, Value, Req=#http_req{meta=Meta}) ->
 -spec has_body(req()) -> boolean().
 has_body(Req) ->
 	case lists:keyfind(<<"content-length">>, 1, Req#http_req.headers) of
-		{_, <<"0">>} ->
+		{_, _, <<"0">>} ->
 			false;
-		{_, _} ->
+		{_, _, _} ->
 			true;
-		_ ->
+		false ->
 			lists:keymember(<<"transfer-encoding">>, 1, Req#http_req.headers)
 	end.
 
@@ -731,11 +751,11 @@ transfer_decode(Data, Req=#http_req{body_state={stream, _,
 transfer_decode_done(Length, Rest, Req=#http_req{
 		headers=Headers, p_headers=PHeaders}) ->
 	Headers2 = lists:keystore(<<"content-length">>, 1, Headers,
-		{<<"content-length">>, list_to_binary(integer_to_list(Length))}),
+		{<<"content-length">>, <<"Content-Length">>, list_to_binary(integer_to_list(Length))}),
 	%% At this point we just assume TEs were all decoded.
 	Headers3 = lists:keydelete(<<"transfer-encoding">>, 1, Headers2),
 	PHeaders2 = lists:keystore(<<"content-length">>, 1, PHeaders,
-		{<<"content-length">>, Length}),
+		{<<"content-length">>, <<"Content-Length">>, Length}),
 	PHeaders3 = lists:keydelete(<<"transfer-encoding">>, 1, PHeaders2),
 	Req#http_req{buffer=Rest, body_state=done,
 		headers=Headers3, p_headers=PHeaders3}.
@@ -885,7 +905,7 @@ set_resp_cookie(Name, Value, Opts, Req) ->
 -spec set_resp_header(binary(), iodata(), Req)
 	-> Req when Req::req().
 set_resp_header(Name, Value, Req=#http_req{resp_headers=RespHeaders}) ->
-	Req#http_req{resp_headers=[{Name, Value}|RespHeaders]}.
+	Req#http_req{resp_headers=[{cowboy_bstr:to_lower(Name), Name, Value}|RespHeaders]}.
 
 %% @doc Add a body to the response.
 %%
@@ -980,7 +1000,7 @@ reply(Status, Headers, Body, Req=#http_req{
 		when RespState =:= waiting; RespState =:= waiting_stream ->
 	HTTP11Headers = if
 		Transport =/= cowboy_spdy, Version =:= 'HTTP/1.1' ->
-			[{<<"connection">>, atom_to_connection(Connection)}];
+			[{<<"connection">>, <<"Connection">>, atom_to_connection(Connection)}];
 		true ->
 			[]
 	end,
@@ -991,15 +1011,15 @@ reply(Status, Headers, Body, Req=#http_req{
 			{RespType, Req2} = if
 				Transport =:= cowboy_spdy ->
 					response(Status, Headers, RespHeaders, [
-						{<<"date">>, cowboy_clock:rfc1123()},
-						{<<"server">>, <<"Cowboy">>}
+						{<<"date">>, <<"date">>, cowboy_clock:rfc1123()},
+						{<<"server">>, <<"server">>, <<"Cowboy">>}
 					], stream, Req);
 				true ->
 					response(Status, Headers, RespHeaders, [
-						{<<"connection">>, <<"close">>},
-						{<<"date">>, cowboy_clock:rfc1123()},
-						{<<"server">>, <<"Cowboy">>},
-						{<<"transfer-encoding">>, <<"identity">>}
+						{<<"connection">>, <<"Connection">>, <<"close">>},
+						{<<"date">>, <<"date">>, cowboy_clock:rfc1123()},
+						{<<"server">>, <<"server">>, <<"Cowboy">>},
+						{<<"transfer-encoding">>, <<"transfer-encoding">>, <<"identity">>}
 					], <<>>, Req)
 			end,
 			if	RespType =/= hook, Method =/= <<"HEAD">> ->
@@ -1026,9 +1046,9 @@ reply(Status, Headers, Body, Req=#http_req{
 			%% We stream the response body for ContentLength bytes.
 			RespConn = response_connection(Headers, Connection),
 			{RespType, Req2} = response(Status, Headers, RespHeaders, [
-					{<<"content-length">>, integer_to_list(ContentLength)},
-					{<<"date">>, cowboy_clock:rfc1123()},
-					{<<"server">>, <<"Cowboy">>}
+					{<<"content-length">>, <<"Content-Length">>, integer_to_list(ContentLength)},
+					{<<"date">>, <<"Date">>, cowboy_clock:rfc1123()},
+					{<<"server">>, <<"Server">>, <<"Cowboy">>}
 				|HTTP11Headers], stream, Req),
 			if	RespType =/= hook, Method =/= <<"HEAD">> ->
 					BodyFun(Socket, Transport);
@@ -1068,10 +1088,10 @@ reply_may_compress(Status, Headers, Body, Req,
 				true ->
 					GzBody = zlib:gzip(Body),
 					{_, Req3} = response(Status, Headers, RespHeaders, [
-							{<<"content-length">>, integer_to_list(byte_size(GzBody))},
-							{<<"content-encoding">>, <<"gzip">>},
-							{<<"date">>, cowboy_clock:rfc1123()},
-							{<<"server">>, <<"Cowboy">>}
+							{<<"content-length">>, <<"Content-Length">>, integer_to_list(byte_size(GzBody))},
+							{<<"content-encoding">>, <<"Content-Encoding">>, <<"gzip">>},
+							{<<"date">>, <<"Date">>, cowboy_clock:rfc1123()},
+							{<<"server">>, <<"Server">>, <<"Cowboy">>}
 						|HTTP11Headers],
 						case Method of <<"HEAD">> -> <<>>; _ -> GzBody end,
 						Req2),
@@ -1088,9 +1108,9 @@ reply_may_compress(Status, Headers, Body, Req,
 reply_no_compress(Status, Headers, Body, Req,
 		RespHeaders, HTTP11Headers, Method, BodySize) ->
 	{_, Req2} = response(Status, Headers, RespHeaders, [
-			{<<"content-length">>, integer_to_list(BodySize)},
-			{<<"date">>, cowboy_clock:rfc1123()},
-			{<<"server">>, <<"Cowboy">>}
+			{<<"content-length">>, <<"Content-Length">>, integer_to_list(BodySize)},
+			{<<"date">>, <<"Date">>, cowboy_clock:rfc1123()},
+			{<<"server">>, <<"Server">>, <<"Cowboy">>}
 		|HTTP11Headers],
 		case Method of <<"HEAD">> -> <<>>; _ -> Body end,
 		Req),
@@ -1144,7 +1164,7 @@ upgrade_reply(Status, Headers, Req=#http_req{transport=Transport,
 		resp_state=waiting, resp_headers=RespHeaders})
 		when Transport =/= cowboy_spdy ->
 	{_, Req2} = response(Status, Headers, RespHeaders, [
-		{<<"connection">>, <<"Upgrade">>}
+		{<<"connection">>, <<"Connection">>, <<"Upgrade">>}
 	], <<>>, Req),
 	{ok, Req2#http_req{resp_state=done, resp_headers=[], resp_body= <<>>}}.
 
@@ -1296,8 +1316,8 @@ chunked_response(Status, Headers, Req=#http_req{
 		transport=cowboy_spdy, resp_state=waiting,
 		resp_headers=RespHeaders}) ->
 	{RespType, Req2} = response(Status, Headers, RespHeaders, [
-		{<<"date">>, cowboy_clock:rfc1123()},
-		{<<"server">>, <<"Cowboy">>}
+		{<<"date">>, <<"date">>, cowboy_clock:rfc1123()},
+		{<<"server">>, <<"server">>, <<"Cowboy">>}
 	], stream, Req),
 	{RespType, Req2#http_req{resp_state=chunks,
 		resp_headers=[], resp_body= <<>>}};
@@ -1311,17 +1331,17 @@ chunked_response(Status, Headers, Req=#http_req{
 		true ->
 			MaybeTE = if
 				RespState =:= waiting_stream -> [];
-				true -> [{<<"transfer-encoding">>, <<"chunked">>}]
+				true -> [{<<"transfer-encoding">>, <<"transfer-encoding">>, <<"chunked">>}]
 			end,
-			[{<<"connection">>, atom_to_connection(Connection)}|MaybeTE]
+			[{<<"connection">>, <<"Connection">>, atom_to_connection(Connection)}|MaybeTE]
 	end,
 	RespState2 = if
 		Version =:= 'HTTP/1.1', RespState =:= 'waiting' -> chunks;
 		true -> stream
 	end,
 	{RespType, Req2} = response(Status, Headers, RespHeaders, [
-		{<<"date">>, cowboy_clock:rfc1123()},
-		{<<"server">>, <<"Cowboy">>}
+		{<<"date">>, <<"date">>, cowboy_clock:rfc1123()},
+		{<<"server">>, <<"server">>, <<"Cowboy">>}
 	|HTTP11Headers], <<>>, Req),
 	{RespType, Req2#http_req{connection=RespConn, resp_state=RespState2,
 			resp_headers=[], resp_body= <<>>}}.
@@ -1358,8 +1378,8 @@ response(Status, Headers, RespHeaders, DefaultHeaders, Body, Req=#http_req{
 		RespState when RespState =:= waiting; RespState =:= waiting_stream ->
 			StatusLine = << "HTTP/1.1", " ",
 				(status(Status))/binary, "\r\n" >>,
-			HeaderLines = [[Key, <<": ">>, Value, <<"\r\n">>]
-				|| {Key, Value} <- FullHeaders],
+			HeaderLines = [[Name, <<": ">>, Value, <<"\r\n">>]
+				|| {_Key, Name, Value} <- FullHeaders],
 			Transport:send(Socket, [StatusLine, HeaderLines, <<"\r\n">>, Body2]),
 			ReqPid ! {?MODULE, resp_sent},
 			normal;
@@ -1368,12 +1388,12 @@ response(Status, Headers, RespHeaders, DefaultHeaders, Body, Req=#http_req{
 	end,
 	{ReplyType, Req2}.
 
--spec response_connection(cowboy:http_headers(), keepalive | close)
+-spec response_connection(cowboy:http_keyed_headers(), keepalive | close)
 	-> keepalive | close.
 response_connection([], Connection) ->
 	Connection;
-response_connection([{Name, Value}|Tail], Connection) ->
-	case Name of
+response_connection([{Key, _Name, Value}|Tail], Connection) ->
+	case Key of
 		<<"connection">> ->
 			Tokens = parse_connection_before(Value, []),
 			connection_to_atom(Tokens);
@@ -1381,10 +1401,10 @@ response_connection([{Name, Value}|Tail], Connection) ->
 			response_connection(Tail, Connection)
 	end.
 
--spec response_merge_headers(cowboy:http_headers(), cowboy:http_headers(),
+-spec response_merge_headers(cowboy:http_keyed_headers(), cowboy:http_keyed_headers(),
 	cowboy:http_headers()) -> cowboy:http_headers().
 response_merge_headers(Headers, RespHeaders, DefaultHeaders) ->
-	Headers2 = [{Key, Value} || {Key, Value} <- Headers],
+	Headers2 = [{Name, Key, Value} || {Name, Key, Value} <- Headers],
 	merge_headers(
 		merge_headers(Headers2, RespHeaders),
 		DefaultHeaders).
@@ -1401,12 +1421,12 @@ response_merge_headers(Headers, RespHeaders, DefaultHeaders) ->
 %% issues with clients/browser which may not support it.
 merge_headers(Headers, []) ->
 	Headers;
-merge_headers(Headers, [{<<"set-cookie">>, Value}|Tail]) ->
-	merge_headers([{<<"set-cookie">>, Value}|Headers], Tail);
-merge_headers(Headers, [{Name, Value}|Tail]) ->
-	Headers2 = case lists:keymember(Name, 1, Headers) of
+merge_headers(Headers, [{<<"set-cookie">>, Name, Value}|Tail]) ->
+	merge_headers([{<<"set-cookie">>, Name, Value}|Headers], Tail);
+merge_headers(Headers, [{Key, Name, Value}|Tail]) ->
+	Headers2 = case lists:keymember(Key, 1, Headers) of
 		true -> Headers;
-		false -> [{Name, Value}|Headers]
+		false -> [{Key, Name, Value}|Headers]
 	end,
 	merge_headers(Headers2, Tail).
 

@@ -22,7 +22,8 @@
 -export([set_env/3]).
 
 -type http_headers() :: [{binary(), iodata()}].
--export_type([http_headers/0]).
+-type http_keyed_headers() :: [{binary(), binary(), iodata()}].
+-export_type([http_headers/0, http_keyed_headers/0]).
 
 -type http_status() :: non_neg_integer() | binary().
 -export_type([http_status/0]).
