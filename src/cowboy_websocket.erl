@@ -175,12 +175,12 @@ websocket_handshake(State=#state{
 		<< Key/binary, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11" >>)),
 	Extensions = case DeflateFrame of
 		false -> [];
-		true -> [{<<"sec-websocket-extensions">>, <<"x-webkit-deflate-frame">>}]
+		true -> [{<<"sec-websocket-extensions">>, <<"Sec-Websocket-Extensions">>, <<"x-webkit-deflate-frame">>}]
 	end,
 	{ok, Req2} = cowboy_req:upgrade_reply(
 		101,
-		[{<<"upgrade">>, <<"websocket">>},
-		 {<<"sec-websocket-accept">>, Challenge}|
+		[{<<"upgrade">>, <<"Upgrade">>, <<"websocket">>},
+		 {<<"sec-websocket-accept">>, <<"Sec-Websocket-Accept">>, Challenge}|
 		 Extensions],
 		Req),
 	%% Flush the resp_sent message before moving on.

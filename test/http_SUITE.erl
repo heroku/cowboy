@@ -358,7 +358,7 @@ init_dispatch(Config) ->
 			{"/init_shutdown", http_init_shutdown, []},
 			{"/long_polling", http_long_polling, []},
 			{"/headers/dupe", http_handler,
-				[{headers, [{<<"connection">>, <<"close">>}]}]},
+				[{headers, [{<<"connection">>, <<"connection">>, <<"close">>}]}]},
 			{"/set_resp/header", http_set_resp,
 				[{headers, [{<<"vary">>, <<"Accept">>}]}]},
 			{"/set_resp/overwrite", http_set_resp,
@@ -806,8 +806,8 @@ onresponse_capitalize(Config) ->
 
 %% Hook for the above onresponse_capitalize test.
 onresponse_capitalize_hook(Status, Headers, Body, Req) ->
-	Headers2 = [{cowboy_bstr:capitalize_token(N), V}
-		|| {N, V} <- Headers],
+	Headers2 = [{K, cowboy_bstr:capitalize_token(N), V}
+		|| {K, N, V} <- Headers],
 	{ok, Req2} = cowboy_req:reply(Status, Headers2, Body, Req),
 	Req2.
 
@@ -830,7 +830,7 @@ onresponse_reply(Config) ->
 %% Hook for the above onresponse tests.
 onresponse_hook(_, Headers, _, Req) ->
 	{ok, Req2} = cowboy_req:reply(
-		<<"777 Lucky">>, [{<<"x-hook">>, <<"onresponse">>}|Headers], Req),
+		<<"777 Lucky">>, [{<<"x-hook">>, <<"x-hook">>, <<"onresponse">>}|Headers], Req),
 	Req2.
 
 parse_host(Config) ->
