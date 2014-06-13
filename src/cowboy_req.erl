@@ -1011,15 +1011,15 @@ reply(Status, Headers, Body, Req=#http_req{
 			{RespType, Req2} = if
 				Transport =:= cowboy_spdy ->
 					response(Status, Headers, RespHeaders, [
-						{<<"date">>, <<"date">>, cowboy_clock:rfc1123()},
-						{<<"server">>, <<"server">>, <<"Cowboy">>}
+						{<<"date">>, <<"Date">>, cowboy_clock:rfc1123()},
+						{<<"server">>, <<"Server">>, <<"Cowboy">>}
 					], stream, Req);
 				true ->
 					response(Status, Headers, RespHeaders, [
 						{<<"connection">>, <<"Connection">>, <<"close">>},
-						{<<"date">>, <<"date">>, cowboy_clock:rfc1123()},
-						{<<"server">>, <<"server">>, <<"Cowboy">>},
-						{<<"transfer-encoding">>, <<"transfer-encoding">>, <<"identity">>}
+						{<<"date">>, <<"Date">>, cowboy_clock:rfc1123()},
+						{<<"server">>, <<"Server">>, <<"Cowboy">>},
+						{<<"transfer-encoding">>, <<"Transfer-Encoding">>, <<"identity">>}
 					], <<>>, Req)
 			end,
 			if	RespType =/= hook, Method =/= <<"HEAD">> ->
@@ -1316,8 +1316,8 @@ chunked_response(Status, Headers, Req=#http_req{
 		transport=cowboy_spdy, resp_state=waiting,
 		resp_headers=RespHeaders}) ->
 	{RespType, Req2} = response(Status, Headers, RespHeaders, [
-		{<<"date">>, <<"date">>, cowboy_clock:rfc1123()},
-		{<<"server">>, <<"server">>, <<"Cowboy">>}
+		{<<"date">>, <<"Date">>, cowboy_clock:rfc1123()},
+		{<<"server">>, <<"Server">>, <<"Cowboy">>}
 	], stream, Req),
 	{RespType, Req2#http_req{resp_state=chunks,
 		resp_headers=[], resp_body= <<>>}};
@@ -1331,7 +1331,7 @@ chunked_response(Status, Headers, Req=#http_req{
 		true ->
 			MaybeTE = if
 				RespState =:= waiting_stream -> [];
-				true -> [{<<"transfer-encoding">>, <<"transfer-encoding">>, <<"chunked">>}]
+				true -> [{<<"transfer-encoding">>, <<"Transfer-Encoding">>, <<"chunked">>}]
 			end,
 			[{<<"connection">>, <<"Connection">>, atom_to_connection(Connection)}|MaybeTE]
 	end,
@@ -1340,8 +1340,8 @@ chunked_response(Status, Headers, Req=#http_req{
 		true -> stream
 	end,
 	{RespType, Req2} = response(Status, Headers, RespHeaders, [
-		{<<"date">>, <<"date">>, cowboy_clock:rfc1123()},
-		{<<"server">>, <<"server">>, <<"Cowboy">>}
+		{<<"date">>, <<"Date">>, cowboy_clock:rfc1123()},
+		{<<"server">>, <<"Server">>, <<"Cowboy">>}
 	|HTTP11Headers], <<>>, Req),
 	{RespType, Req2#http_req{connection=RespConn, resp_state=RespState2,
 			resp_headers=[], resp_body= <<>>}}.
