@@ -376,12 +376,12 @@ header(Key, Req, Default) ->
 	end.
 
 -spec keyed_header(binary(), Req) ->
-    {{binary(), binary()} | undefined, Req} when Req::req().
+	{{binary(), binary()} | undefined, Req} when Req::req().
 keyed_header(Key, Req) ->
 	keyed_header(Key, Req, undefined).
 
 -spec keyed_header(binary(), Req, Default)
-    -> {binary(), binary() | Default, Req} when Req::req(), Default::any().
+	-> {binary(), binary() | Default, Req} when Req::req(), Default::any().
 keyed_header(Key, Req, Default) ->
 	case lists:keyfind(Key, 1, Req#http_req.headers) of
 		{Key, Name, Value} -> {Name, Value, Req};
@@ -395,7 +395,7 @@ headers(Req) ->
 
 -spec keyed_headers(Req) -> {cowboy:http_keyed_headers(), Req} when Req::req().
 keyed_headers(Req) ->
-    {Req#http_req.headers, Req}.
+	{Req#http_req.headers, Req}.
 
 %% @doc Semantically parse headers.
 %%
@@ -590,12 +590,12 @@ has_body(Req) ->
 body_length(Req) ->
 	case parse_header(<<"transfer-encoding">>, Req) of
 		{ok, [<<"identity">>], Req2} ->
-                        case parse_header(<<"content-length">>, Req2, 0) of
-                                {ok, Length, Req3} ->
-                                        {Length, Req3};
-                                {error, badarg} ->
-                                        {error, badarg}
-                        end;
+						case parse_header(<<"content-length">>, Req2, 0) of
+								{ok, Length, Req3} ->
+										{Length, Req3};
+								{error, badarg} ->
+										{error, badarg}
+						end;
 		{ok, _, Req2} ->
 			{undefined, Req2};
 		{error, badarg} ->
@@ -695,28 +695,28 @@ stream_body_recv(MaxLength, Req=#http_req{
 %% A length of 0 means we want any amount of data buffered, including what
 %% is already there
 buffer_data(0, Timeout, Req=#http_req{socket=Socket, transport=Transport,
-                                      buffer= <<>>}) ->
-    case Transport:recv(Socket, 0, Timeout) of
-        {ok, Data} ->
-            {ok, Req#http_req{buffer=Data}};
-        {error, Reason} ->
-            {error, Reason}
-    end;
+									  buffer= <<>>}) ->
+	case Transport:recv(Socket, 0, Timeout) of
+		{ok, Data} ->
+			{ok, Req#http_req{buffer=Data}};
+		{error, Reason} ->
+			{error, Reason}
+	end;
 buffer_data(0, _Timeout, Req) -> % data is in the buffer
-    {ok, Req};
+	{ok, Req};
 buffer_data(Length, Timeout, Req=#http_req{socket=Socket, transport=Transport,
-                                           buffer=Buffer}) ->
-    case Length - iolist_size(Buffer) of
-        N when N > 0 ->
-            case Transport:recv(Socket, N, Timeout) of
-                {ok, Data} ->
-                    {ok, Req#http_req{buffer= <<Buffer/binary, Data/binary>>}};
-                {error, Reason} ->
-                    {error, Reason}
-            end;
-        _ ->
-            {ok, Req}
-    end.
+										   buffer=Buffer}) ->
+	case Length - iolist_size(Buffer) of
+		N when N > 0 ->
+			case Transport:recv(Socket, N, Timeout) of
+				{ok, Data} ->
+					{ok, Req#http_req{buffer= <<Buffer/binary, Data/binary>>}};
+				{error, Reason} ->
+					{error, Reason}
+			end;
+		_ ->
+			{ok, Req}
+	end.
 
 
 -spec transfer_decode(binary(), Req)
