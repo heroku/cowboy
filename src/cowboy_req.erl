@@ -1404,7 +1404,7 @@ response_connection([{Key, _Name, Value}|Tail], Connection) ->
 -spec response_merge_headers(cowboy:http_keyed_headers(), cowboy:http_keyed_headers(),
 	cowboy:http_headers()) -> cowboy:http_headers().
 response_merge_headers(Headers, RespHeaders, DefaultHeaders) ->
-	Headers2 = [{Name, Key, Value} || {Name, Key, Value} <- Headers],
+	Headers2 = [{Key, cowboy_bstr:capitalize_token(Name), Value} || {Key, Name, Value} <- Headers],
 	merge_headers(
 		merge_headers(Headers2, RespHeaders),
 		DefaultHeaders).
@@ -1426,7 +1426,7 @@ merge_headers(Headers, [{<<"set-cookie">>, Name, Value}|Tail]) ->
 merge_headers(Headers, [{Key, Name, Value}|Tail]) ->
 	Headers2 = case lists:keymember(Key, 1, Headers) of
 		true -> Headers;
-		false -> [{Key, Name, Value}|Headers]
+		false -> [{Key, cowboy_bstr:capitalize_token(Name), Value}|Headers]
 	end,
 	merge_headers(Headers2, Tail).
 
