@@ -1148,11 +1148,15 @@ upgrade_reply(Status, Headers, Req=#http_req{transport=Transport,
 %% Meant to be used internally for sending errors after crashes.
 %% @private
 -spec maybe_reply(cowboy:http_status(), req()) -> ok.
-maybe_reply(Status, Req) ->
+maybe_reply(Status, Req=#http_req{resp_state=RespState}) ->
 	receive
 		{cowboy_req, resp_sent} -> ok
 	after 0 ->
-		_ = cowboy_req:reply(Status, Req),
+		case RespState of
+			waiting -> cowboy_req:reply(Status, Req);
+			waiting_stream -> cowboy_req:reply(Status, Req);
+			_ -> ok
+		end,
 		ok
 	end.
 
