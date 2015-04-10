@@ -1,8 +1,8 @@
-cowboy_static
+cowboyku_static
 =============
 
-The `cowboy_static` module implements file serving capabilities
-by using the REST semantics provided by `cowboy_rest`.
+The `cowboyku_static` module implements file serving capabilities
+by using the REST semantics provided by `cowboyku_rest`.
 
 Types
 -----

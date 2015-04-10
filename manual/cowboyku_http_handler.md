@@ -1,7 +1,7 @@
-cowboy_http_handler
+cowboyku_http_handler
 ===================
 
-The `cowboy_http_handler` behaviour defines the interface used
+The `cowboyku_http_handler` behaviour defines the interface used
 by plain HTTP handlers.
 
 Unless noted otherwise, the callbacks will be executed sequentially.
@@ -20,7 +20,7 @@ Callbacks
 > Types:
 >  *  TransportName = tcp | ssl | atom()
 >  *  ProtocolName = http | atom()
->  *  Req = cowboy_req:req()
+>  *  Req = cowboyku_req:req()
 >  *  Opts = any()
 >  *  State = any()
 >
@@ -32,20 +32,20 @@ Callbacks
 ### handle(Req, State) -> {ok, Req, State}
 
 > Types:
->  *  Req = cowboy_req:req()
+>  *  Req = cowboyku_req:req()
 >  *  State = any()
 >
 > Handle the request.
 >
 > This callback is where the request is handled and a response
-> should be sent. If a response is not sent, Cowboy will send
+> should be sent. If a response is not sent, Cowboyku will send
 > a `204 No Content` response automatically.
 
 ### terminate(Reason, Req, State) -> ok
 
 > Types:
 >  *  Reason = {normal, shutdown} | {error, atom()}
->  *  Req = cowboy_req:req()
+>  *  Req = cowboyku_req:req()
 >  *  State = any()
 >
 > Perform any necessary cleanup of the state.

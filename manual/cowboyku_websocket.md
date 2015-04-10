@@ -1,10 +1,10 @@
-cowboy_websocket
+cowboyku_websocket
 ================
 
-The `cowboy_websocket` module implements the Websocket protocol.
+The `cowboyku_websocket` module implements the Websocket protocol.
 
 The callbacks for websocket handlers are defined in the manual
-for the `cowboy_websocket_handler` behaviour.
+for the `cowboyku_websocket_handler` behaviour.
 
 Types
 -----

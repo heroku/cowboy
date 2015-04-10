@@ -1,7 +1,7 @@
-cowboy_router
+cowboyku_router
 =============
 
-The `cowboy_router` middleware maps the requested host and
+The `cowboyku_router` middleware maps the requested host and
 path to the handler to be used for processing the request.
 It uses the dispatch rules compiled from the routes given
 to the `compile/1` function for this purpose. It adds the
@@ -38,7 +38,7 @@ Types
 
 ### dispatch_rules() - opaque to the user
 
-> Rules for dispatching request used by Cowboy.
+> Rules for dispatching request used by Cowboyku.
 
 ### routes() = [{Host, Paths} | {Host, constraints(), Paths}]
 
@@ -65,4 +65,4 @@ Exports
 >  *  Routes = routes()
 >  *  Dispatch = dispatch_rules()
 >
-> Compile the routes for use by Cowboy.
+> Compile the routes for use by Cowboyku.

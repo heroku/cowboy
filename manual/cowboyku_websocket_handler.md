@@ -1,7 +1,7 @@
-cowboy_websocket_handler
+cowboyku_websocket_handler
 ========================
 
-The `cowboy_websocket_handler` behaviour defines the interface used
+The `cowboyku_websocket_handler` behaviour defines the interface used
 by Websocket handlers.
 
 The `init/3` and `websocket_init/3` callbacks will always be called,
@@ -18,16 +18,16 @@ Callbacks
 ---------
 
 ### init({TransportName, ProtocolName}, Req, Opts)
-	-> {upgrade, protocol, cowboy_websocket}
-	| {upgrade, protocol, cowboy_websocket, Req, Opts}
+	-> {upgrade, protocol, cowboyku_websocket}
+	| {upgrade, protocol, cowboyku_websocket, Req, Opts}
 
 > Types:
 >  *  TransportName = tcp | ssl | atom()
 >  *  ProtocolName = http | atom()
->  *  Req = cowboy_req:req()
+>  *  Req = cowboyku_req:req()
 >  *  Opts = any()
 >
-> Upgrade the protocol to `cowboy_websocket`.
+> Upgrade the protocol to `cowboyku_websocket`.
 
 ### websocket_init(TransportName, Req, Opts)
 	-> {ok, Req, State}
@@ -38,7 +38,7 @@ Callbacks
 
 > Types:
 >  *  TransportName = tcp | ssl | atom()
->  *  Req = cowboy_req:req()
+>  *  Req = cowboyku_req:req()
 >  *  Opts = any()
 >  *  State = any()
 >  *  Timeout = timeout()
@@ -75,9 +75,9 @@ Callbacks
 
 > Types:
 >  *  InFrame = {text | binary | ping | pong, binary()}
->  *  Req = cowboy_req:req()
+>  *  Req = cowboyku_req:req()
 >  *  State = any()
->  *  OutFrame = cowboy_websocket:frame()
+>  *  OutFrame = cowboyku_websocket:frame()
 >
 > Handle the data received from the Websocket connection.
 >
@@ -101,9 +101,9 @@ Callbacks
 
 > Types:
 >  *  Info = any()
->  *  Req = cowboy_req:req()
+>  *  Req = cowboyku_req:req()
 >  *  State = any()
->  *  OutFrame = cowboy_websocket:frame()
+>  *  OutFrame = cowboyku_websocket:frame()
 >
 > Handle the Erlang message received.
 >
@@ -121,8 +121,8 @@ Callbacks
 ### websocket_terminate(Reason, Req, State) -> ok
 
 > Types:
->  *  Reason = {normal, shutdown | timeout} | {remote, closed} | {remote, cowboy_websocket:close_code(), binary()} | {error, badencoding | badframe | closed | atom()}
->  *  Req = cowboy_req:req()
+>  *  Reason = {normal, shutdown | timeout} | {remote, closed} | {remote, cowboyku_websocket:close_code(), binary()} | {error, badencoding | badframe | closed | atom()}
+>  *  Req = cowboyku_req:req()
 >  *  State = any()
 >
 > Perform any necessary cleanup of the state.

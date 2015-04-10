@@ -1,7 +1,7 @@
-cowboy_rest
+cowboyku_rest
 ===========
 
-The `cowboy_rest` module implements REST semantics on top of
+The `cowboyku_rest` module implements REST semantics on top of
 the HTTP protocol.
 
 This module cannot be described as a behaviour due to most of
@@ -50,23 +50,23 @@ Callbacks
 ---------
 
 ### init({TransportName, ProtocolName}, Req, Opts)
-	-> {upgrade, protocol, cowboy_rest}
-	| {upgrade, protocol, cowboy_rest, Req, Opts}
+	-> {upgrade, protocol, cowboyku_rest}
+	| {upgrade, protocol, cowboyku_rest, Req, Opts}
 
 > Types:
 >  *  TransportName = tcp | ssl | atom()
 >  *  ProtocolName = http | atom()
->  *  Req = cowboy_req:req()
+>  *  Req = cowboyku_req:req()
 >  *  Opts = any()
 >
-> Upgrade the protocol to `cowboy_rest`.
+> Upgrade the protocol to `cowboyku_rest`.
 >
 > This is the only mandatory callback.
 
 ### rest_init(Req, Opts) -> {ok, Req, State}
 
 > Types:
->  *  Req = cowboy_req:req()
+>  *  Req = cowboyku_req:req()
 >  *  Opts = any()
 >  *  State = any()
 >
@@ -75,7 +75,7 @@ Callbacks
 ### rest_terminate(Req, State) -> ok
 
 > Types:
->  *  Req = cowboy_req:req()
+>  *  Req = cowboyku_req:req()
 >  *  State = any()
 >
 > Perform any necessary cleanup of the state.
@@ -89,7 +89,7 @@ Callbacks
 
 > Types:
 >  *  Callback - one of the REST callbacks described below
->  *  Req = cowboy_req:req()
+>  *  Req = cowboyku_req:req()
 >  *  State = any()
 >  *  Value - see the REST callbacks description below
 >
@@ -138,7 +138,7 @@ REST callbacks description
 > The list must be ordered in order of preference.
 >
 > If the accept-charset header was not sent, the first charset
-> in the list will be selected. Otherwise Cowboy will select
+> in the list will be selected. Otherwise Cowboyku will select
 > the most appropriate charset from the list.
 >
 > The chosen charset will be set in the `Req` object as the meta
@@ -165,7 +165,7 @@ REST callbacks description
 > Each content-type can be given either as a binary string or as
 > a tuple containing the type, subtype and parameters.
 >
-> Cowboy will select the most appropriate content-type from the list.
+> Cowboyku will select the most appropriate content-type from the list.
 > If any parameter is acceptable, then the tuple form should be used
 > with parameters set to `'*'`. If the parameters value is set to `[]`
 > only content-type values with no parameters will be accepted. All
@@ -175,7 +175,7 @@ REST callbacks description
 > This function will be called for POST, PUT and PATCH requests.
 > It is entirely possible to define different callbacks for different
 > methods if the handling of the request differs. Simply verify
-> what the method is with `cowboy_req:method/1` and return a
+> what the method is with `cowboyku_req:method/1` and return a
 > different list for each methods.
 >
 > The `AcceptResource` value is the name of the callback that will
@@ -196,9 +196,9 @@ REST callbacks description
 > resource.
 >
 > If a response body must be sent, the appropriate media-type, charset
-> and language can be retrieved using the `cowboy_req:meta/{2,3}`
+> and language can be retrieved using the `cowboyku_req:meta/{2,3}`
 > functions. The respective keys are `media_type`, `charset`
-> and `language`. The body can be set using `cowboy_req:set_resp_body/2`.
+> and `language`. The body can be set using `cowboyku_req:set_resp_body/2`.
 
 ### content_types_provided
 
@@ -218,7 +218,7 @@ REST callbacks description
 > Each content-type can be given either as a binary string or as
 > a tuple containing the type, subtype and parameters.
 >
-> Cowboy will select the most appropriate content-type from the list.
+> Cowboyku will select the most appropriate content-type from the list.
 > If any parameter is acceptable, then the tuple form should be used
 > with parameters set to `'*'`. If the parameters value is set to `[]`
 > only content-type values with no parameters will be accepted. All
@@ -355,8 +355,8 @@ REST callbacks description
 > The full list of methods known by the server should be
 > returned, regardless of their use in the resource.
 >
-> The default value lists the methods Cowboy knows and
-> implement in `cowboy_rest`.
+> The default value lists the methods Cowboyku knows and
+> implement in `cowboyku_rest`.
 >
 > Methods are case sensitive. Standard methods are always uppercase.
 
@@ -371,7 +371,7 @@ REST callbacks description
 > The list must be ordered in order of preference.
 >
 > If the accept-language header was not sent, the first language
-> in the list will be selected. Otherwise Cowboy will select
+> in the list will be selected. Otherwise Cowboyku will select
 > the most appropriate language from the list.
 >
 > The chosen language will be set in the `Req` object as the meta
@@ -400,7 +400,7 @@ REST callbacks description
 >
 > Return whether the request is malformed.
 >
-> Cowboy has already performed all the necessary checks
+> Cowboyku has already performed all the necessary checks
 > by the time this function is called, so few resources
 > are expected to implement it.
 >
@@ -441,10 +441,10 @@ REST callbacks description
 > are different representations of the resource, for example
 > different content-type. If this function returns `true`,
 > the response body should include information about these
-> different representations using `cowboy_req:set_resp_body/2`.
+> different representations using `cowboyku_req:set_resp_body/2`.
 > The content-type of the response should be the one previously
 > negociated and that can be obtained by calling
-> `cowboy_req:meta(media_type, Req)`.
+> `cowboyku_req:meta(media_type, Req)`.
 
 ### options
 
@@ -457,7 +457,7 @@ REST callbacks description
 > The response should inform the client the communication
 > options available for this resource.
 >
-> By default, Cowboy will send a `200 OK` response with the
+> By default, Cowboyku will send a `200 OK` response with the
 > allow header set.
 
 ### previously_existed
@@ -477,7 +477,7 @@ REST callbacks description
 > Return whether the resource exists.
 >
 > If it exists, conditional headers will be tested before
-> attempting to perform the action. Otherwise, Cowboy will
+> attempting to perform the action. Otherwise, Cowboyku will
 > check if the resource previously existed first.
 
 ### service_available
@@ -502,7 +502,7 @@ REST callbacks description
 >
 > Return whether the requested URI is too long.
 >
-> Cowboy has already performed all the necessary checks
+> Cowboyku has already performed all the necessary checks
 > by the time this function is called, so few resources
 > are expected to implement it.
 >
@@ -520,7 +520,7 @@ REST callbacks description
 > This also applies to the transfer-encoding header. This
 > function must return `false` for any unknown content-*
 > headers, or if the headers can't be understood. The
-> function `cowboy_req:parse_header/2` can be used to
+> function `cowboyku_req:parse_header/2` can be used to
 > quickly check the headers can be parsed.
 >
 > A `501 Not Implemented` response will be sent if this
@@ -548,7 +548,7 @@ REST callbacks description
 > These request headers return the same resource but with different
 > parameters, like another language or a different content-type.
 >
-> Cowboy will automatically add the accept, accept-language and
+> Cowboyku will automatically add the accept, accept-language and
 > accept-charset headers to the list if the respective functions
 > were defined in the resource.
 >

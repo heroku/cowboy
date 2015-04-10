@@ -1,7 +1,7 @@
-cowboy_handler
+cowboyku_handler
 ==============
 
-The `cowboy_handler` middleware executes the handler passed
+The `cowboyku_handler` middleware executes the handler passed
 through the environment values `handler` and `handler_opts`,
 and add the result of this execution to the environment as
 the value `result`, indicating that the request has been

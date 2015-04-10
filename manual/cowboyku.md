@@ -1,7 +1,7 @@
-cowboy
+cowboyku
 ======
 
-The `cowboy` module provides convenience functions for
+The `cowboyku` module provides convenience functions for
 manipulating Ranch listeners.
 
 Types
@@ -21,7 +21,7 @@ Types
 
 > HTTP version.
 
-### onrequest_fun() = fun((cowboy_req:req()) -> cowboy_req:req())
+### onrequest_fun() = fun((cowboyku_req:req()) -> cowboyku_req:req())
 
 > Fun called immediately after receiving a request.
 >
@@ -31,7 +31,7 @@ Types
 > is executed.
 
 ### onresponse_fun() = fun((http_status(), http_headers(),
-	iodata(), cowboy_req:req()) -> cowboy_req:req())
+	iodata(), cowboyku_req:req()) -> cowboyku_req:req())
 
 > Fun called immediately before sending the response.
 >
@@ -49,7 +49,7 @@ Exports
 >  *  Ref = ranch:ref()
 >  *  NbAcceptors = non_neg_integer()
 >  *  TransOpts = ranch_tcp:opts()
->  *  ProtoOpts = cowboy_protocol:opts()
+>  *  ProtoOpts = cowboyku_protocol:opts()
 >
 > Start listening for HTTP connections. Returns the pid for this
 > listener's supervisor.
@@ -60,7 +60,7 @@ Exports
 >  *  Ref = ranch:ref()
 >  *  NbAcceptors = non_neg_integer()
 >  *  TransOpts = ranch_ssl:opts()
->  *  ProtoOpts = cowboy_protocol:opts()
+>  *  ProtoOpts = cowboyku_protocol:opts()
 >
 > Start listening for HTTPS connections. Returns the pid for this
 > listener's supervisor.
@@ -71,7 +71,7 @@ Exports
 >  *  Ref = ranch:ref()
 >  *  NbAcceptors = non_neg_integer()
 >  *  TransOpts = ranch_ssl:opts()
->  *  ProtoOpts = cowboy_spdy:opts()
+>  *  ProtoOpts = cowboyku_spdy:opts()
 >
 > Start listening for SPDY connections. Returns the pid for this
 > listener's supervisor.

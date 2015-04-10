@@ -1,7 +1,7 @@
-cowboy_loop_handler
+cowboyku_loop_handler
 ===================
 
-The `cowboy_loop_handler` behaviour defines the interface used
+The `cowboyku_loop_handler` behaviour defines the interface used
 by HTTP handlers that do not send a response directly, instead
 requiring a receive loop to process Erlang messages.
 
@@ -29,7 +29,7 @@ Callbacks
 > Types:
 >  *  TransportName = tcp | ssl | atom()
 >  *  ProtocolName = http | atom()
->  *  Req = cowboy_req:req()
+>  *  Req = cowboyku_req:req()
 >  *  Opts = any()
 >  *  State = any()
 >  *  Timeout = timeout()
@@ -59,7 +59,7 @@ Callbacks
 
 > Types:
 >  *  Info = any()
->  *  Req = cowboy_req:req()
+>  *  Req = cowboyku_req:req()
 >  *  State = any()
 >
 > Handle the Erlang message received.
@@ -77,7 +77,7 @@ Callbacks
 
 > Types:
 >  *  Reason = {normal, shutdown} | {normal, timeout} | {error, closed} | {error, overflow} | {error, atom()}
->  *  Req = cowboy_req:req()
+>  *  Req = cowboyku_req:req()
 >  *  State = any()
 >
 > Perform any necessary cleanup of the state.

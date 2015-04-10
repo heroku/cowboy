@@ -1,7 +1,7 @@
-cowboy_req
+cowboyku_req
 ==========
 
-The `cowboy_req` module provides functions to access, manipulate
+The `cowboyku_req` module provides functions to access, manipulate
 and respond to requests.
 
 The functions in this module follow patterns for their return types,
@@ -16,7 +16,7 @@ The only exception is the `chunk/2` function which may return `ok`.
 
 Whenever `Req` is returned, you must use this returned value and
 ignore any previous you may have had. This value contains various
-state informations which are necessary for Cowboy to do some lazy
+state informations which are necessary for Cowboyku to do some lazy
 evaluation or cache results where appropriate.
 
 Types
@@ -93,7 +93,7 @@ Request related exports
 ### headers(Req) -> {Headers, Req2}
 
 > Types:
->  *  Headers = cowboy:http_headers()
+>  *  Headers = cowboyku:http_headers()
 >
 > Return all headers.
 
@@ -107,7 +107,7 @@ Request related exports
 ### host_info(Req) -> {HostInfo, Req2}
 
 > Types:
->  *  HostInfo = cowboy_router:tokens() | undefined
+>  *  HostInfo = cowboyku_router:tokens() | undefined
 >
 > Return the extra tokens from matching against `...` during routing.
 
@@ -119,7 +119,7 @@ Request related exports
 > Return the requested URL excluding the path component.
 >
 > This function will always return `undefined` until the
-> `cowboy_router` middleware has been executed. This includes
+> `cowboyku_router` middleware has been executed. This includes
 > the `onrequest` hook.
 
 ### meta(Name, Req) -> meta(Name, Req, undefined)
@@ -218,7 +218,7 @@ Request related exports
 >  *  `{From, infinity}`: everything after `From` units
 >  *  `-Final`: the final `Final` units
 >
-> An `undefined` tuple will be returned if Cowboy doesn't know how
+> An `undefined` tuple will be returned if Cowboyku doesn't know how
 > to parse the requested header.
 
 ### path(Req) -> {Path, Req2}
@@ -231,7 +231,7 @@ Request related exports
 ### path_info(Req) -> {PathInfo, Req2}
 
 > Types:
->  *  PathInfo = cowboy_router:tokens() | undefined
+>  *  PathInfo = cowboyku_router:tokens() | undefined
 >
 > Return the extra tokens from matching against `...` during routing.
 
@@ -251,7 +251,7 @@ Request related exports
 >
 > The port returned by this function is obtained by parsing
 > the host header. It may be different than the actual port
-> the client used to connect to the Cowboy server.
+> the client used to connect to the Cowboyku server.
 
 ### qs(Req) -> {QueryString, Req2}
 
@@ -302,13 +302,13 @@ Request related exports
 > Return the requested URL.
 >
 > This function will always return `undefined` until the
-> `cowboy_router` middleware has been executed. This includes
+> `cowboyku_router` middleware has been executed. This includes
 > the `onrequest` hook.
 
 ### version(Req) -> {Version, Req2}
 
 > Types:
->  *  Version = cowboy:http_version()
+>  *  Version = cowboyku:http_version()
 >
 > Return the HTTP version used for this request.
 
@@ -384,7 +384,7 @@ Request body related exports
 > for decoding the request body, generally specified in the
 > transfer-encoding and content-encoding request headers.
 >
-> Cowboy will properly handle chunked transfer-encoding by
+> Cowboyku will properly handle chunked transfer-encoding by
 > default. You do not need to call this function if you do
 > not need to decode other encodings, `stream_body/{1,2}`
 > will perform all the required initialization when it is
@@ -416,12 +416,12 @@ Request body related exports
 > This function can be called repeatedly until a `done` tuple
 > is returned, indicating the body has been fully received.
 >
-> Cowboy will properly handle chunked transfer-encoding by
+> Cowboyku will properly handle chunked transfer-encoding by
 > default. If any other transfer-encoding or content-encoding
 > has been used for the request, custom decoding functions
 > can be used. They must be specified using `init_stream/4`.
 >
-> After the body has been streamed fully, Cowboy will remove
+> After the body has been streamed fully, Cowboyku will remove
 > the transfer-encoding header from the `Req` object, and add
 > the content-length header if it wasn't already there.
 
@@ -449,8 +449,8 @@ Response related exports
 ### chunked_reply(StatusCode, Headers, Req) -> {ok, Req2}
 
 > Types:
->  *  StatusCode = cowboy:http_status()
->  *  Headers = cowboy:http_headers()
+>  *  StatusCode = cowboyku:http_status()
+>  *  Headers = cowboyku:http_headers()
 >
 > Send a response using chunked transfer-encoding.
 >
@@ -497,8 +497,8 @@ Response related exports
 ### reply(StatusCode, Headers, Body, Req) -> {ok, Req2}
 
 > Types:
->  *  StatusCode = cowboy:http_status()
->  *  Headers = cowboy:http_headers()
+>  *  StatusCode = cowboyku:http_status()
+>  *  Headers = cowboyku:http_headers()
 >  *  Body = iodata()
 >
 > Send a response.

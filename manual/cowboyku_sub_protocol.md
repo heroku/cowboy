@@ -1,7 +1,7 @@
-cowboy_sub_protocol
+cowboyku_sub_protocol
 ===================
 
-The `cowboy_sub_protocol` behaviour defines the interface used
+The `cowboyku_sub_protocol` behaviour defines the interface used
 by modules that implement a protocol on top of HTTP.
 
 Types
@@ -19,16 +19,16 @@ Callbacks
 	| {error, StatusCode, Req}
 
 > Types:
->  *  Req = cowboy_req:req()
+>  *  Req = cowboyku_req:req()
 >  *  Env = env()
 >  *  Handler = module()
 >  *  Opts = any()
 >  *  Module = module()
 >  *  Function = atom()
 >  *  Args = [any()]
->  *  StatusCode = cowboy:http_status()
+>  *  StatusCode = cowboyku:http_status()
 >
 > Upgrade the protocol.
 >
-> Please refer to the `cowboy_middleware` manual for a
+> Please refer to the `cowboyku_middleware` manual for a
 > description of the return values.
