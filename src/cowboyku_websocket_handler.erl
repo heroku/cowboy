@@ -46,7 +46,7 @@
 %% <em>websocket_info/3</em> can decide to hibernate the process by adding
 %% an extra element to the returned tuple, containing the atom
 %% <em>hibernate</em>. Doing so helps save memory and improve CPU usage.
--module(cowboy_websocket_handler).
+-module(cowboyku_websocket_handler).
 
 -type opts() :: any().
 -type state() :: any().
@@ -54,7 +54,7 @@
 	| {normal, timeout}
 	| {error, closed}
 	| {remote, closed}
-	| {remote, cowboy_websocket:close_code(), binary()}
+	| {remote, cowboyku_websocket:close_code(), binary()}
 	| {error, badencoding}
 	| {error, badframe}
 	| {error, atom()}.
@@ -65,20 +65,20 @@
 	| {ok, Req, state(), timeout()}
 	| {ok, Req, state(), timeout(), hibernate}
 	| {shutdown, Req}
-	when Req::cowboy_req:req().
+	when Req::cowboyku_req:req().
 -callback websocket_handle({text | binary | ping | pong, binary()}, Req, State)
 	-> {ok, Req, State}
 	| {ok, Req, State, hibernate}
-	| {reply, cowboy_websocket:frame() | [cowboy_websocket:frame()], Req, State}
-	| {reply, cowboy_websocket:frame() | [cowboy_websocket:frame()], Req, State, hibernate}
+	| {reply, cowboyku_websocket:frame() | [cowboyku_websocket:frame()], Req, State}
+	| {reply, cowboyku_websocket:frame() | [cowboyku_websocket:frame()], Req, State, hibernate}
 	| {shutdown, Req, State}
-	when Req::cowboy_req:req(), State::state().
+	when Req::cowboyku_req:req(), State::state().
 -callback websocket_info(any(), Req, State)
 	-> {ok, Req, State}
 	| {ok, Req, State, hibernate}
-	| {reply, cowboy_websocket:frame() | [cowboy_websocket:frame()], Req, State}
-	| {reply, cowboy_websocket:frame() | [cowboy_websocket:frame()], Req, State, hibernate}
+	| {reply, cowboyku_websocket:frame() | [cowboyku_websocket:frame()], Req, State}
+	| {reply, cowboyku_websocket:frame() | [cowboyku_websocket:frame()], Req, State, hibernate}
 	| {shutdown, Req, State}
-	when Req::cowboy_req:req(), State::state().
--callback websocket_terminate(terminate_reason(), cowboy_req:req(), state())
+	when Req::cowboyku_req:req(), State::state().
+-callback websocket_terminate(terminate_reason(), cowboyku_req:req(), state())
 	-> ok.

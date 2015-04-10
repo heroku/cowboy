@@ -22,8 +22,8 @@
 %%
 %% If the route cannot be found, processing stops with either
 %% a 400 or a 404 reply.
--module(cowboy_router).
--behaviour(cowboy_middleware).
+-module(cowboyku_router).
+-behaviour(cowboyku_middleware).
 
 -export([compile/1]).
 -export([execute/2]).
@@ -52,7 +52,7 @@
 -export_type([dispatch_rules/0]).
 
 %% @doc Compile a list of routes into the dispatch format used
-%% by Cowboy's routing.
+%% by Cowboyku's routing.
 -spec compile(routes()) -> dispatch_rules().
 compile(Routes) ->
 	compile(Routes, []).
@@ -165,13 +165,13 @@ compile_brackets_split(<< C, Rest/binary >>, Acc, N) ->
 %% @private
 -spec execute(Req, Env)
 	-> {ok, Req, Env} | {error, 400 | 404, Req}
-	when Req::cowboy_req:req(), Env::cowboy_middleware:env().
+	when Req::cowboyku_req:req(), Env::cowboyku_middleware:env().
 execute(Req, Env) ->
 	{_, Dispatch} = lists:keyfind(dispatch, 1, Env),
-	[Host, Path] = cowboy_req:get([host, path], Req),
+	[Host, Path] = cowboyku_req:get([host, path], Req),
 	case match(Dispatch, Host, Path) of
 		{ok, Handler, HandlerOpts, Bindings, HostInfo, PathInfo} ->
-			Req2 = cowboy_req:set_bindings(HostInfo, PathInfo, Bindings, Req),
+			Req2 = cowboyku_req:set_bindings(HostInfo, PathInfo, Bindings, Req),
 			{ok, Req2, [{handler, Handler}, {handler_opts, HandlerOpts}|Env]};
 		{error, notfound, host} ->
 			{error, 400, Req};
@@ -332,9 +332,9 @@ split_path(Path, Acc) ->
 	try
 		case binary:match(Path, <<"/">>) of
 			nomatch when Path =:= <<>> ->
-				lists:reverse([cowboy_http:urldecode(S) || S <- Acc]);
+				lists:reverse([cowboyku_http:urldecode(S) || S <- Acc]);
 			nomatch ->
-				lists:reverse([cowboy_http:urldecode(S) || S <- [Path|Acc]]);
+				lists:reverse([cowboyku_http:urldecode(S) || S <- [Path|Acc]]);
 			{Pos, _} ->
 				<< Segment:Pos/binary, _:8, Rest/bits >> = Path,
 				split_path(Rest, [Segment|Acc])
@@ -383,19 +383,19 @@ compile_test_() ->
 		%% Match any host and path.
 		{[{'_', [{'_', h, o}]}],
 			[{'_', [], [{'_', [], h, o}]}]},
-		{[{"cowboy.example.org",
+		{[{"cowboyku.example.org",
 				[{"/", ha, oa}, {"/path/to/resource", hb, ob}]}],
-			[{[<<"org">>, <<"example">>, <<"cowboy">>], [], [
+			[{[<<"org">>, <<"example">>, <<"cowboyku">>], [], [
 				{[], [], ha, oa},
 				{[<<"path">>, <<"to">>, <<"resource">>], [], hb, ob}]}]},
 		{[{'_', [{"/path/to/resource/", h, o}]}],
 			[{'_', [], [{[<<"path">>, <<"to">>, <<"resource">>], [], h, o}]}]},
 		{[{'_', [{"/путь/к/ресурсу/", h, o}]}],
 			[{'_', [], [{[<<"путь">>, <<"к">>, <<"ресурсу">>], [], h, o}]}]},
-		{[{"cowboy.example.org.", [{'_', h, o}]}],
-			[{[<<"org">>, <<"example">>, <<"cowboy">>], [], [{'_', [], h, o}]}]},
-		{[{".cowboy.example.org", [{'_', h, o}]}],
-			[{[<<"org">>, <<"example">>, <<"cowboy">>], [], [{'_', [], h, o}]}]},
+		{[{"cowboyku.example.org.", [{'_', h, o}]}],
+			[{[<<"org">>, <<"example">>, <<"cowboyku">>], [], [{'_', [], h, o}]}]},
+		{[{".cowboyku.example.org", [{'_', h, o}]}],
+			[{[<<"org">>, <<"example">>, <<"cowboyku">>], [], [{'_', [], h, o}]}]},
 		{[{"некий.сайт.рф.", [{'_', h, o}]}],
 			[{[<<"рф">>, <<"сайт">>, <<"некий">>], [], [{'_', [], h, o}]}]},
 		{[{":subdomain.example.org", [{"/hats/:name/prices", h, o}]}],
@@ -541,7 +541,7 @@ match_constraints_test() ->
 		<<"ninenines.eu">>, <<"/path/NaN/">>),
 	Dispatch2 = [{'_', [],
 		[{[<<"path">>, username], [{username, function,
-		fun(Value) -> Value =:= cowboy_bstr:to_lower(Value) end}],
+		fun(Value) -> Value =:= cowboyku_bstr:to_lower(Value) end}],
 		match, []}]}],
 	{ok, _, [], [{username, <<"essen">>}], _, _} = match(Dispatch2,
 		<<"ninenines.eu">>, <<"/path/essen">>),

@@ -14,7 +14,7 @@
 %% OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 %% @doc Core HTTP parsing API.
--module(cowboy_http).
+-module(cowboyku_http).
 
 %% Parsing.
 -export([list/2]).
@@ -102,7 +102,7 @@ content_type(Data) ->
 							false ->
 								{Type, SubType, Params};
 							{_, Charset} ->
-								Charset2 = cowboy_bstr:to_lower(Charset),
+								Charset2 = cowboyku_bstr:to_lower(Charset),
 								Params2 = lists:keyreplace(<<"charset">>,
 									1, Params, {<<"charset">>, Charset2}),
 								{Type, SubType, Params2}
@@ -642,7 +642,7 @@ alpha(<<>>, Fun, Acc) ->
 alpha(<< C, Rest/binary >>, Fun, Acc)
 		when C >= $a andalso C =< $z;
 			 C >= $A andalso C =< $Z ->
-	C2 = cowboy_bstr:char_to_lower(C),
+	C2 = cowboyku_bstr:char_to_lower(C),
 	alpha(Rest, Fun, << Acc/binary, C2 >>);
 alpha(Data, Fun, Acc) ->
 	Fun(Data, Acc).
@@ -680,7 +680,7 @@ token(Data = << C, _Rest/binary >>, Fun, _Case, Acc)
 			 C < 32; C =:= 127 ->
 	Fun(Data, Acc);
 token(<< C, Rest/binary >>, Fun, Case = ci, Acc) ->
-	C2 = cowboy_bstr:char_to_lower(C),
+	C2 = cowboyku_bstr:char_to_lower(C),
 	token(Rest, Fun, Case, << Acc/binary, C2 >>);
 token(<< C, Rest/binary >>, Fun, Case, Acc) ->
 	token(Rest, Fun, Case, << Acc/binary, C >>).

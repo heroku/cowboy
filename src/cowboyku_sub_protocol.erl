@@ -27,11 +27,11 @@
 %%
 %% <em>upgrade/4</em> will be called when a handler's init/3 returns
 %% {upgrade, protocol, Module}, where Module is the module of the sub protocol.
--module(cowboy_sub_protocol).
+-module(cowboyku_sub_protocol).
 
 -callback upgrade(Req, Env, module(), any())
 	-> {ok, Req, Env}
 	| {suspend, module(), atom(), [any()]}
 	| {halt, Req}
-	| {error, cowboy:http_status(), Req}
-	when Req::cowboy_req:req(), Env::cowboy_middleware:env().
+	| {error, cowboyku:http_status(), Req}
+	when Req::cowboyku_req:req(), Env::cowboyku_middleware:env().

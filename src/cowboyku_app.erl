@@ -13,26 +13,17 @@
 %% OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 %% @private
--module(cowboy_sup).
--behaviour(supervisor).
+-module(cowboyku_app).
+-behaviour(application).
 
 %% API.
--export([start_link/0]).
-
-%% supervisor.
--export([init/1]).
-
--define(SUPERVISOR, ?MODULE).
+-export([start/2]).
+-export([stop/1]).
 
 %% API.
 
--spec start_link() -> {ok, pid()}.
-start_link() ->
-	supervisor:start_link({local, ?SUPERVISOR}, ?MODULE, []).
+start(_Type, _Args) ->
+	cowboyku_sup:start_link().
 
-%% supervisor.
-
-init([]) ->
-	Procs = [{cowboy_clock, {cowboy_clock, start_link, []},
-		permanent, 5000, worker, [cowboy_clock]}],
-	{ok, {{one_for_one, 10, 10}, Procs}}.
+stop(_State) ->
+	ok.

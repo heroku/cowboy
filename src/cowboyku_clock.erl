@@ -18,7 +18,7 @@
 %% the cache of formatted dates every second, all API calls are
 %% local and directly read from the ETS cache table, providing
 %% fast time and date computations.
--module(cowboy_clock).
+-module(cowboyku_clock).
 -behaviour(gen_server).
 
 %% API.

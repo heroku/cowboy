@@ -12,11 +12,11 @@
 %% ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 %% OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-{application, cowboy, [
-	{description, "Small, fast, modular HTTP server."},
-	{vsn, "0.9.0"},
+{application, cowboyku, [
+	{description, "Small, fast, modular HTTP server for proxies."},
+	{vsn, "1.0.0"},
 	{modules, []},
-	{registered, [cowboy_clock, cowboy_sup]},
+	{registered, [cowboyku_clock, cowboyku_sup]},
 	{applications, [
 		kernel,
 		stdlib,
@@ -24,6 +24,6 @@
 		cowlib,
 		crypto
 	]},
-	{mod, {cowboy_app, []}},
+	{mod, {cowboyku_app, []}},
 	{env, []}
 ]}.

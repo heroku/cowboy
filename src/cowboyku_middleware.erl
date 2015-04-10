@@ -21,9 +21,9 @@
 %% if needed.
 %%
 %% A middleware can perform any operation. Make sure you always return
-%% the last modified Req so that Cowboy has the up to date information
+%% the last modified Req so that Cowboyku has the up to date information
 %% about the request.
--module(cowboy_middleware).
+-module(cowboyku_middleware).
 
 -type env() :: [{atom(), any()}].
 -export_type([env/0]).
@@ -32,5 +32,5 @@
 	-> {ok, Req, Env}
 	| {suspend, module(), atom(), [any()]}
 	| {halt, Req}
-	| {error, cowboy:http_status(), Req}
-	when Req::cowboy_req:req(), Env::env().
+	| {error, cowboyku:http_status(), Req}
+	when Req::cowboyku_req:req(), Env::env().

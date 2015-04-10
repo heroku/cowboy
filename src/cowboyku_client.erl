@@ -13,7 +13,7 @@
 %% OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 %% @private
--module(cowboy_client).
+-module(cowboyku_client).
 
 -export([init/1]).
 -export([state/1]).
@@ -45,7 +45,7 @@
 	timeout = 5000 :: timeout(), %% @todo Configurable.
 	buffer = <<>> :: binary(),
 	connection = keepalive :: keepalive | close,
-	version = 'HTTP/1.1' :: cowboy:http_version(),
+	version = 'HTTP/1.1' :: cowboyku:http_version(),
 	response_body = undefined :: undefined | non_neg_integer()
 }).
 
@@ -249,7 +249,7 @@ stream_header(Client=#client{state=State, buffer=Buffer,
 		[Line, Rest] ->
 			%% @todo Do a better parsing later on.
 			[Name, Value] = binary:split(Line, <<": ">>),
-			Name2 = cowboy_bstr:to_lower(Name),
+			Name2 = cowboyku_bstr:to_lower(Name),
 			Client2 = case Name2 of
 				<<"content-length">> ->
 					Length = list_to_integer(binary_to_list(Value)),

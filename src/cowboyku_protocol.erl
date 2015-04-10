@@ -44,9 +44,9 @@
 %%   full request line and headers. Defaults to 5000 milliseconds.</dd>
 %% </dl>
 %%
-%% Note that there is no need to monitor these processes when using Cowboy as
+%% Note that there is no need to monitor these processes when using Cowboyku as
 %% an application as it already supervises them under the listener supervisor.
--module(cowboy_protocol).
+-module(cowboyku_protocol).
 
 %% API.
 -export([start_link/4]).
@@ -57,7 +57,7 @@
 -export([resume/6]).
 
 -type opts() :: [{compress, boolean()}
-	| {env, cowboy_middleware:env()}
+	| {env, cowboyku_middleware:env()}
 	| {max_empty_lines, non_neg_integer()}
 	| {max_header_name_length, non_neg_integer()}
 	| {max_header_value_length, non_neg_integer()}
@@ -65,8 +65,8 @@
 	| {max_keepalive, non_neg_integer()}
 	| {max_request_line_length, non_neg_integer()}
 	| {middlewares, [module()]}
-	| {onrequest, cowboy:onrequest_fun()}
-	| {onresponse, cowboy:onresponse_fun()}
+	| {onrequest, cowboyku:onrequest_fun()}
+	| {onresponse, cowboyku:onresponse_fun()}
 	| {timeout, timeout()}].
 -export_type([opts/0]).
 
@@ -75,9 +75,9 @@
 	transport :: module(),
 	middlewares :: [module()],
 	compress :: boolean(),
-	env :: cowboy_middleware:env(),
-	onrequest :: undefined | cowboy:onrequest_fun(),
-	onresponse = undefined :: undefined | cowboy:onresponse_fun(),
+	env :: cowboyku_middleware:env(),
+	onrequest :: undefined | cowboyku:onrequest_fun(),
+	onresponse = undefined :: undefined | cowboyku:onresponse_fun(),
 	max_empty_lines :: non_neg_integer(),
 	req_keepalive = 1 :: non_neg_integer(),
 	max_keepalive :: non_neg_integer(),
@@ -117,7 +117,7 @@ init(Ref, Socket, Transport, Opts) ->
 	MaxHeaders = get_value(max_headers, Opts, 100),
 	MaxKeepalive = get_value(max_keepalive, Opts, 100),
 	MaxRequestLineLength = get_value(max_request_line_length, Opts, 4096),
-	Middlewares = get_value(middlewares, Opts, [cowboy_router, cowboy_handler]),
+	Middlewares = get_value(middlewares, Opts, [cowboyku_router, cowboyku_handler]),
 	Env = [{listener, Ref}|get_value(env, Opts, [])],
 	OnRequest = get_value(onrequest, Opts, undefined),
 	OnResponse = get_value(onresponse, Opts, undefined),
@@ -499,7 +499,7 @@ request(Buffer, State=#state{socket=Socket, transport=Transport,
 		Method, Path, Query, Version, Headers, Host, Port) ->
 	case Transport:peername(Socket) of
 		{ok, Peer} ->
-			Req = cowboy_req:new(Socket, Transport, Peer, Method, Path,
+			Req = cowboyku_req:new(Socket, Transport, Peer, Method, Path,
 				Query, Version, Headers, Host, Port, Buffer,
 				ReqKeepalive < MaxKeepalive, Compress, OnResponse),
 			onrequest(Req, State);
@@ -512,21 +512,21 @@ request(Buffer, State=#state{socket=Socket, transport=Transport,
 %% in which case we consider the request handled and move on to the next
 %% one. Note that since we haven't dispatched yet, we don't know the
 %% handler, host_info, path_info or bindings yet.
--spec onrequest(cowboy_req:req(), #state{}) -> ok.
+-spec onrequest(cowboyku_req:req(), #state{}) -> ok.
 onrequest(Req, State=#state{onrequest=undefined}) ->
 	execute(Req, State);
 onrequest(Req, State=#state{onrequest=OnRequest}) ->
 	Req2 = OnRequest(Req),
-	case cowboy_req:get(resp_state, Req2) of
+	case cowboyku_req:get(resp_state, Req2) of
 		waiting -> execute(Req2, State);
 		_ -> next_request(Req2, State, ok)
 	end.
 
--spec execute(cowboy_req:req(), #state{}) -> ok.
+-spec execute(cowboyku_req:req(), #state{}) -> ok.
 execute(Req, State=#state{middlewares=Middlewares, env=Env}) ->
 	execute(Req, State, Env, Middlewares).
 
--spec execute(cowboy_req:req(), #state{}, cowboy_middleware:env(), [module()])
+-spec execute(cowboyku_req:req(), #state{}, cowboyku_middleware:env(), [module()])
 	-> ok.
 execute(Req, State, Env, []) ->
 	next_request(Req, State, get_value(result, Env, ok));
@@ -544,7 +544,7 @@ execute(Req, State, Env, [Middleware|Tail]) ->
 	end.
 
 %% @private
--spec resume(#state{}, cowboy_middleware:env(), [module()],
+-spec resume(#state{}, cowboyku_middleware:env(), [module()],
 	module(), module(), [any()]) -> ok.
 resume(State, Env, Tail, Module, Function, Args) ->
 	case apply(Module, Function, Args) of
@@ -559,22 +559,22 @@ resume(State, Env, Tail, Module, Function, Args) ->
 			error_terminate(Code, Req2, State)
 	end.
 
--spec next_request(cowboy_req:req(), #state{}, any()) -> ok.
+-spec next_request(cowboyku_req:req(), #state{}, any()) -> ok.
 next_request(Req, State=#state{req_keepalive=Keepalive, timeout=Timeout},
 		HandlerRes) ->
-	cowboy_req:ensure_response(Req, 204),
+	cowboyku_req:ensure_response(Req, 204),
 	%% If we are going to close the connection,
 	%% we do not want to attempt to skip the body.
-	case cowboy_req:get(connection, Req) of
+	case cowboyku_req:get(connection, Req) of
 		close ->
 			terminate(State);
 		_ ->
-			Buffer = case cowboy_req:skip_body(Req) of
-				{ok, Req2} -> cowboy_req:get(buffer, Req2);
+			Buffer = case cowboyku_req:skip_body(Req) of
+				{ok, Req2} -> cowboyku_req:get(buffer, Req2);
 				_ -> close
 			end,
 			%% Flush the resp_sent message before moving on.
-			receive {cowboy_req, resp_sent} -> ok after 0 -> ok end,
+			receive {cowboyku_req, resp_sent} -> ok after 0 -> ok end,
 			if HandlerRes =:= ok, Buffer =/= close ->
 					?MODULE:parse_request(Buffer,
 						State#state{req_keepalive=Keepalive + 1,
@@ -584,16 +584,16 @@ next_request(Req, State=#state{req_keepalive=Keepalive, timeout=Timeout},
 			end
 	end.
 
--spec error_terminate(cowboy:http_status(), #state{}) -> ok.
+-spec error_terminate(cowboyku:http_status(), #state{}) -> ok.
 error_terminate(Status, State=#state{socket=Socket, transport=Transport,
 		compress=Compress, onresponse=OnResponse}) ->
-	error_terminate(Status, cowboy_req:new(Socket, Transport,
+	error_terminate(Status, cowboyku_req:new(Socket, Transport,
 		undefined, <<"GET">>, <<>>, <<>>, 'HTTP/1.1', [], <<>>,
 		undefined, <<>>, false, Compress, OnResponse), State).
 
--spec error_terminate(cowboy:http_status(), cowboy_req:req(), #state{}) -> ok.
+-spec error_terminate(cowboyku:http_status(), cowboyku_req:req(), #state{}) -> ok.
 error_terminate(Status, Req, State) ->
-	cowboy_req:maybe_reply(Status, Req),
+	cowboyku_req:maybe_reply(Status, Req),
 	terminate(State).
 
 -spec terminate(#state{}) -> ok.

@@ -14,9 +14,9 @@
 
 %% @doc SPDY protocol handler.
 %%
-%% Note that there is no need to monitor these processes when using Cowboy as
+%% Note that there is no need to monitor these processes when using Cowboyku as
 %% an application as it already supervises them under the listener supervisor.
--module(cowboy_spdy).
+-module(cowboyku_spdy).
 
 %% API.
 -export([start_link/4]).
@@ -67,10 +67,10 @@
 	children = [] :: [#child{}]
 }).
 
--type opts() :: [{env, cowboy_middleware:env()}
+-type opts() :: [{env, cowboyku_middleware:env()}
 	| {middlewares, [module()]}
-	| {onrequest, cowboy:onrequest_fun()}
-	| {onresponse, cowboy:onresponse_fun()}].
+	| {onrequest, cowboyku:onrequest_fun()}
+	| {onresponse, cowboyku:onresponse_fun()}].
 -export_type([opts/0]).
 
 %% API.
@@ -97,7 +97,7 @@ init(Parent, Ref, Socket, Transport, Opts) ->
 	process_flag(trap_exit, true),
 	ok = proc_lib:init_ack(Parent, {ok, self()}),
 	{ok, Peer} = Transport:peername(Socket),
-	Middlewares = get_value(middlewares, Opts, [cowboy_router, cowboy_handler]),
+	Middlewares = get_value(middlewares, Opts, [cowboyku_router, cowboyku_handler]),
 	Env = [{listener, Ref}|get_value(env, Opts, [])],
 	OnRequest = get_value(onrequest, Opts, undefined),
 	OnResponse = get_value(onresponse, Opts, undefined),
@@ -363,7 +363,7 @@ request_init(FakeSocket, Peer, OnRequest, OnResponse,
 	{Host2, Port} = cow_http:parse_fullhost(Host),
 	{Path2, Qs} = cow_http:parse_fullpath(Path),
 	Version2 = cow_http:parse_version(Version),
-	Req = cowboy_req:new(FakeSocket, ?MODULE, Peer,
+	Req = cowboyku_req:new(FakeSocket, ?MODULE, Peer,
 		Method, Path2, Qs, Version2, Headers,
 		Host2, Port, <<>>, true, false, OnResponse),
 	case OnRequest of
@@ -371,16 +371,16 @@ request_init(FakeSocket, Peer, OnRequest, OnResponse,
 			execute(Req, Env, Middlewares);
 		_ ->
 			Req2 = OnRequest(Req),
-			case cowboy_req:get(resp_state, Req2) of
+			case cowboyku_req:get(resp_state, Req2) of
 				waiting -> execute(Req2, Env, Middlewares);
 				_ -> ok
 			end
 	end.
 
--spec execute(cowboy_req:req(), cowboy_middleware:env(), [module()])
+-spec execute(cowboyku_req:req(), cowboyku_middleware:env(), [module()])
 	-> ok.
 execute(Req, _, []) ->
-	cowboy_req:ensure_response(Req, 204);
+	cowboyku_req:ensure_response(Req, 204);
 execute(Req, Env, [Middleware|Tail]) ->
 	case Middleware:execute(Req, Env) of
 		{ok, Req2, Env2} ->
@@ -389,13 +389,13 @@ execute(Req, Env, [Middleware|Tail]) ->
 			erlang:hibernate(?MODULE, resume,
 				[Env, Tail, Module, Function, Args]);
 		{halt, Req2} ->
-			cowboy_req:ensure_response(Req2, 204);
+			cowboyku_req:ensure_response(Req2, 204);
 		{error, Status, Req2} ->
-			cowboy_req:maybe_reply(Status, Req2)
+			cowboyku_req:maybe_reply(Status, Req2)
 	end.
 
 %% @private
--spec resume(cowboy_middleware:env(), [module()],
+-spec resume(cowboyku_middleware:env(), [module()],
 	module(), module(), [any()]) -> ok.
 resume(Env, Tail, Module, Function, Args) ->
 	case apply(Module, Function, Args) of
@@ -405,12 +405,12 @@ resume(Env, Tail, Module, Function, Args) ->
 			erlang:hibernate(?MODULE, resume,
 				[Env, Tail, Module2, Function2, Args2]);
 		{halt, Req2} ->
-			cowboy_req:ensure_response(Req2, 204);
+			cowboyku_req:ensure_response(Req2, 204);
 		{error, Status, Req2} ->
-			cowboy_req:maybe_reply(Status, Req2)
+			cowboyku_req:maybe_reply(Status, Req2)
 	end.
 
-%% Reply functions used by cowboy_req.
+%% Reply functions used by cowboyku_req.
 
 reply(Socket = {Pid, _}, Status, Headers, Body) ->
 	_ = case iolist_size(Body) of
@@ -448,7 +448,7 @@ send(Socket, Data) ->
 
 %% We don't wait for the result of the actual sendfile call,
 %% therefore we can't know how much was actually sent.
-%% This isn't a problem as we don't use this value in Cowboy.
+%% This isn't a problem as we don't use this value in Cowboyku.
 sendfile(Socket = {Pid, _}, Filepath) ->
 	_ = Pid ! {sendfile, Socket, Filepath},
 	{ok, undefined}.

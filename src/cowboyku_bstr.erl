@@ -13,7 +13,7 @@
 %% OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 %% @doc Binary string manipulation.
--module(cowboy_bstr).
+-module(cowboyku_bstr).
 
 %% Binary strings.
 -export([capitalize_token/1]).

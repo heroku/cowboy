@@ -13,7 +13,7 @@
 %% OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 %% @doc Multipart parser.
--module(cowboy_multipart).
+-module(cowboyku_multipart).
 
 -export([parser/1]).
 -export([content_disposition/1]).
@@ -41,10 +41,10 @@ parser(Boundary) when is_binary(Boundary) ->
 %% @todo Parse the MIME header instead of the HTTP one.
 -spec content_disposition(binary()) -> disposition().
 content_disposition(Data) ->
-	cowboy_http:token_ci(Data,
+	cowboyku_http:token_ci(Data,
 		fun (_Rest, <<>>) -> {error, badarg};
 			(Rest, Disposition) ->
-				cowboy_http:params(Rest,
+				cowboyku_http:params(Rest,
 					fun (<<>>, Params) -> {Disposition, Params};
 						(_Rest2, _) -> {error, badarg}
 					end)
@@ -137,7 +137,7 @@ parse_boundary_eol(Bin, Pattern) ->
 			% End of line found, remove optional whitespace.
 			<<_:CrlfStart/binary, Rest/binary>> = Bin,
 			Fun = fun (Rest2) -> parse_boundary_crlf(Rest2, Pattern) end,
-			cowboy_http:whitespace(Rest, Fun);
+			cowboyku_http:whitespace(Rest, Fun);
 		nomatch ->
 			% CRLF not found in the given binary.
 			RestStart = max(byte_size(Bin) - 1, 0),
@@ -166,8 +166,8 @@ parse_headers(Bin, Pattern, Acc) ->
 	case erlang:decode_packet(httph_bin, Bin, []) of
 		{ok, {http_header, _, Name, _, Value}, Rest} ->
 			Name2 = case is_atom(Name) of
-				true -> cowboy_bstr:to_lower(atom_to_binary(Name, latin1));
-				false -> cowboy_bstr:to_lower(Name)
+				true -> cowboyku_bstr:to_lower(atom_to_binary(Name, latin1));
+				false -> cowboyku_bstr:to_lower(Name)
 			end,
 			parse_headers(Rest, Pattern, [{Name2, Value} | Acc]);
 		{ok, http_eoh, Rest} ->
@@ -251,12 +251,12 @@ multipart_test_() ->
 		{
 			<<
 				"--boundary\r\nX-Name:answer\r\n\r\n42"
-				"\r\n--boundary\r\nServer:Cowboy\r\n\r\nIt rocks!\r\n"
+				"\r\n--boundary\r\nServer:Cowboyku\r\n\r\nIt rocks!\r\n"
 				"\r\n--boundary--"
 			>>,
 			[
 				{[{<<"x-name">>, <<"answer">>}], <<"42">>},
-				{[{<<"server">>, <<"Cowboy">>}], <<"It rocks!\r\n">>}
+				{[{<<"server">>, <<"Cowboyku">>}], <<"It rocks!\r\n">>}
 			]
 		}
 	],

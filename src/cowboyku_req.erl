@@ -31,14 +31,14 @@
 %% Exceptions include <em>chunk/2</em> which always returns <em>'ok'</em>,
 %% and <em>to_list/1</em> which returns a list of key/values.
 %%
-%% Also note that all body reading functions perform actions, as Cowboy
+%% Also note that all body reading functions perform actions, as Cowboyku
 %% doesn't read the request body until they are called.
 %%
 %% Whenever <em>Req</em> is returned, it should always be kept in place of
 %% the one given as argument in your function call, because it keeps
-%% track of the request and response state. Doing so allows Cowboy to do
+%% track of the request and response state. Doing so allows Cowboyku to do
 %% some lazy evaluation and cache results when possible.
--module(cowboy_req).
+-module(cowboyku_req).
 
 -define(POLL_INTERVAL, 1000).
 
@@ -144,17 +144,17 @@
 	%% Request.
 	pid = undefined :: pid(),
 	method = <<"GET">> :: binary(),
-	version = 'HTTP/1.1' :: cowboy:http_version(),
+	version = 'HTTP/1.1' :: cowboyku:http_version(),
 	peer = undefined :: undefined | {inet:ip_address(), inet:port_number()},
 	host = undefined :: undefined | binary(),
-	host_info = undefined :: undefined | cowboy_router:tokens(),
+	host_info = undefined :: undefined | cowboyku_router:tokens(),
 	port = undefined :: undefined | inet:port_number(),
 	path = undefined :: binary(),
-	path_info = undefined :: undefined | cowboy_router:tokens(),
+	path_info = undefined :: undefined | cowboyku_router:tokens(),
 	qs = undefined :: binary(),
 	qs_vals = undefined :: undefined | list({binary(), binary() | true}),
-	bindings = undefined :: undefined | cowboy_router:bindings(),
-	headers = [] :: cowboy:http_headers(),
+	bindings = undefined :: undefined | cowboyku_router:bindings(),
+	headers = [] :: cowboyku:http_headers(),
 	p_headers = [] :: [any()], %% @todo Improve those specs.
 	cookies = undefined :: undefined | [{binary(), binary()}],
 	meta = [] :: [{atom(), any()}],
@@ -169,14 +169,14 @@
 	resp_compress = false :: boolean(),
 	resp_state = waiting :: locked | waiting | waiting_stream
 		| chunks | stream | done,
-	resp_headers = [] :: cowboy:http_headers(),
+	resp_headers = [] :: cowboyku:http_headers(),
 	resp_body = <<>> :: iodata() | resp_body_fun()
 		| {non_neg_integer(), resp_body_fun()}
 		| {chunked, resp_chunked_fun()},
 
 	%% Functions.
 	onresponse = undefined :: undefined | already_called
-		| cowboy:onresponse_fun()
+		| cowboyku:onresponse_fun()
 }).
 
 -opaque req() :: #http_req{}.
@@ -194,9 +194,9 @@
 -spec new(any(), module(),
 	undefined | {inet:ip_address(), inet:port_number()},
 	binary(), binary(), binary(),
-	cowboy:http_version(), cowboy:http_headers(), binary(),
+	cowboyku:http_version(), cowboyku:http_headers(), binary(),
 	inet:port_number() | undefined, binary(), boolean(), boolean(),
-	undefined | cowboy:onresponse_fun())
+	undefined | cowboyku:onresponse_fun())
 	-> req().
 new(Socket, Transport, Peer, Method, Path, Query,
 		Version, Headers, Host, Port, Buffer, CanKeepalive,
@@ -229,7 +229,7 @@ method(Req) ->
 	{Req#http_req.method, Req}.
 
 %% @doc Return the HTTP version used for the request.
--spec version(Req) -> {cowboy:http_version(), Req} when Req::req().
+-spec version(Req) -> {cowboyku:http_version(), Req} when Req::req().
 version(Req) ->
 	{Req#http_req.version, Req}.
 
@@ -248,7 +248,7 @@ host(Req) ->
 %% @doc Return the extra host information obtained from partially matching
 %% the hostname using <em>'...'</em>.
 -spec host_info(Req)
-	-> {cowboy_router:tokens() | undefined, Req} when Req::req().
+	-> {cowboyku_router:tokens() | undefined, Req} when Req::req().
 host_info(Req) ->
 	{Req#http_req.host_info, Req}.
 
@@ -265,7 +265,7 @@ path(Req) ->
 %% @doc Return the extra path information obtained from partially matching
 %% the patch using <em>'...'</em>.
 -spec path_info(Req)
-	-> {cowboy_router:tokens() | undefined, Req} when Req::req().
+	-> {cowboyku_router:tokens() | undefined, Req} when Req::req().
 path_info(Req) ->
 	{Req#http_req.path_info, Req}.
 
@@ -305,7 +305,7 @@ qs_vals(Req=#http_req{qs_vals=QsVals}) ->
 %% @doc Return the request URL as a binary without the path and query string.
 %%
 %% The URL includes the scheme, host and port only.
-%% @see cowboy_req:url/1
+%% @see cowboyku_req:url/1
 -spec host_url(Req) -> {undefined | binary(), Req} when Req::req().
 host_url(Req=#http_req{port=undefined}) ->
 	{undefined, Req};
@@ -375,7 +375,7 @@ header(Name, Req, Default) ->
 	end.
 
 %% @doc Return the full list of headers.
--spec headers(Req) -> {cowboy:http_headers(), Req} when Req::req().
+-spec headers(Req) -> {cowboyku:http_headers(), Req} when Req::req().
 headers(Req) ->
 	{Req#http_req.headers, Req}.
 
@@ -407,55 +407,55 @@ parse_header_default(_Name) -> undefined.
 parse_header(Name = <<"accept">>, Req, Default) ->
 	parse_header(Name, Req, Default,
 		fun (Value) ->
-			cowboy_http:list(Value, fun cowboy_http:media_range/2)
+			cowboyku_http:list(Value, fun cowboyku_http:media_range/2)
 		end);
 parse_header(Name = <<"accept-charset">>, Req, Default) ->
 	parse_header(Name, Req, Default,
 		fun (Value) ->
-			cowboy_http:nonempty_list(Value, fun cowboy_http:conneg/2)
+			cowboyku_http:nonempty_list(Value, fun cowboyku_http:conneg/2)
 		end);
 parse_header(Name = <<"accept-encoding">>, Req, Default) ->
 	parse_header(Name, Req, Default,
 		fun (Value) ->
-			cowboy_http:list(Value, fun cowboy_http:conneg/2)
+			cowboyku_http:list(Value, fun cowboyku_http:conneg/2)
 		end);
 parse_header(Name = <<"accept-language">>, Req, Default) ->
 	parse_header(Name, Req, Default,
 		fun (Value) ->
-			cowboy_http:nonempty_list(Value, fun cowboy_http:language_range/2)
+			cowboyku_http:nonempty_list(Value, fun cowboyku_http:language_range/2)
 		end);
 parse_header(Name = <<"authorization">>, Req, Default) ->
 	parse_header(Name, Req, Default,
 		fun (Value) ->
-			cowboy_http:token_ci(Value, fun cowboy_http:authorization/2)
+			cowboyku_http:token_ci(Value, fun cowboyku_http:authorization/2)
 		end);
 parse_header(Name = <<"content-length">>, Req, Default) ->
-	parse_header(Name, Req, Default, fun cowboy_http:digits/1);
+	parse_header(Name, Req, Default, fun cowboyku_http:digits/1);
 parse_header(Name = <<"content-type">>, Req, Default) ->
-	parse_header(Name, Req, Default, fun cowboy_http:content_type/1);
+	parse_header(Name, Req, Default, fun cowboyku_http:content_type/1);
 parse_header(Name = <<"cookie">>, Req, Default) ->
 	parse_header(Name, Req, Default, fun cow_cookie:parse_cookie/1);
 parse_header(Name = <<"expect">>, Req, Default) ->
 	parse_header(Name, Req, Default,
 		fun (Value) ->
-			cowboy_http:nonempty_list(Value, fun cowboy_http:expectation/2)
+			cowboyku_http:nonempty_list(Value, fun cowboyku_http:expectation/2)
 		end);
 parse_header(Name, Req, Default)
 		when Name =:= <<"if-match">>;
 			Name =:= <<"if-none-match">> ->
-	parse_header(Name, Req, Default, fun cowboy_http:entity_tag_match/1);
+	parse_header(Name, Req, Default, fun cowboyku_http:entity_tag_match/1);
 parse_header(Name, Req, Default)
 		when Name =:= <<"if-modified-since">>;
 			Name =:= <<"if-unmodified-since">> ->
-	parse_header(Name, Req, Default, fun cowboy_http:http_date/1);
+	parse_header(Name, Req, Default, fun cowboyku_http:http_date/1);
 parse_header(Name = <<"range">>, Req, Default) ->
-	parse_header(Name, Req, Default, fun cowboy_http:range/1);
+	parse_header(Name, Req, Default, fun cowboyku_http:range/1);
 parse_header(Name, Req, Default)
 		when Name =:= <<"sec-websocket-protocol">>;
 			Name =:= <<"x-forwarded-for">> ->
 	parse_header(Name, Req, Default,
 		fun (Value) ->
-			cowboy_http:nonempty_list(Value, fun cowboy_http:token/2)
+			cowboyku_http:nonempty_list(Value, fun cowboyku_http:token/2)
 		end);
 %% @todo Extension parameters.
 parse_header(Name, Req, Default)
@@ -463,10 +463,10 @@ parse_header(Name, Req, Default)
 			Name =:= <<"upgrade">> ->
 	parse_header(Name, Req, Default,
 		fun (Value) ->
-			cowboy_http:nonempty_list(Value, fun cowboy_http:token_ci/2)
+			cowboyku_http:nonempty_list(Value, fun cowboyku_http:token_ci/2)
 		end);
 parse_header(Name = <<"sec-websocket-extensions">>, Req, Default) ->
-	parse_header(Name, Req, Default, fun cowboy_http:parameterized_tokens/1);
+	parse_header(Name, Req, Default, fun cowboyku_http:parameterized_tokens/1);
 parse_header(Name, Req, Default) ->
 	{Value, Req2} = header(Name, Req, Default),
 	{undefined, Value, Req2}.
@@ -587,7 +587,7 @@ body_length(Req) ->
 %% @doc Initialize body streaming and set custom decoding functions.
 %%
 %% Calling this function is optional. It should only be used if you
-%% need to override the default behavior of Cowboy. Otherwise you
+%% need to override the default behavior of Cowboyku. Otherwise you
 %% should call stream_body/{1,2} directly.
 %%
 %% Two decodings happen. First a decoding function is applied to the
@@ -599,7 +599,7 @@ body_length(Req) ->
 %%
 %% Content encoding is generally used for compression.
 %%
-%% Standard encodings can be found in cowboy_http.
+%% Standard encodings can be found in cowboyku_http.
 -spec init_stream(transfer_decode_fun(), any(), content_decode_fun(), Req)
 	-> {ok, Req} when Req::req().
 init_stream(TransferDecode, TransferState, ContentDecode, Req) ->
@@ -635,8 +635,8 @@ stream_body(MaxLength, Req=#http_req{body_state=waiting, version=Version,
 		{ok, [<<"chunked">>], Req2} ->
 			stream_body(MaxLength, Req2#http_req{body_state=
 				{stream, 0,
-					fun cowboy_http:te_chunked/2, {0, 0},
-					fun cowboy_http:ce_identity/1}});
+					fun cowboyku_http:te_chunked/2, {0, 0},
+					fun cowboyku_http:ce_identity/1}});
 		{ok, [<<"identity">>], Req2} ->
 			{Length, Req3} = body_length(Req2),
 			case Length of
@@ -645,8 +645,8 @@ stream_body(MaxLength, Req=#http_req{body_state=waiting, version=Version,
 				Length ->
 					stream_body(MaxLength, Req3#http_req{body_state=
 						{stream, Length,
-							fun cowboy_http:te_identity/2, {0, Length},
-							fun cowboy_http:ce_identity/1}})
+							fun cowboyku_http:te_identity/2, {0, Length},
+							fun cowboyku_http:ce_identity/1}})
 			end
 	end;
 stream_body(_, Req=#http_req{body_state=done}) ->
@@ -669,7 +669,7 @@ stream_body_recv(MaxLength, Req=#http_req{
 		{error, Reason} -> {error, Reason}
 	end.
 
-%% Takes the body data from the Transport and stores it in Cowboy's internal
+%% Takes the body data from the Transport and stores it in Cowboyku's internal
 %% buffer, returning the amount of buffered data.
 -spec buffer_data(non_neg_integer(), timeout(), req()) ->
 	{error, Reason::term()} |
@@ -822,14 +822,14 @@ body_qs(MaxBodyLength, Req) ->
 %% <em>{body, Data, Req}</em> tuples and finally <em>{end_of_part, Req}</em>. When there
 %% is no part to parse anymore, <em>{eof, Req}</em> is returned.
 -spec multipart_data(Req)
-	-> {headers, cowboy:http_headers(), Req} | {body, binary(), Req}
+	-> {headers, cowboyku:http_headers(), Req} | {body, binary(), Req}
 		| {end_of_part | eof, Req} when Req::req().
 multipart_data(Req=#http_req{body_state=waiting}) ->
 	{ok, {<<"multipart">>, _SubType, Params}, Req2} =
 		parse_header(<<"content-type">>, Req),
 	{_, Boundary} = lists:keyfind(<<"boundary">>, 1, Params),
 	{ok, Length, Req3} = parse_header(<<"content-length">>, Req2),
-	multipart_data(Req3, Length, {more, cowboy_multipart:parser(Boundary)});
+	multipart_data(Req3, Length, {more, cowboyku_multipart:parser(Boundary)});
 multipart_data(Req=#http_req{multipart={Length, Cont}}) ->
 	multipart_data(Req, Length, Cont());
 multipart_data(Req=#http_req{body_state=done}) ->
@@ -904,7 +904,7 @@ set_resp_body(Body, Req) ->
 %% anything other than reply/2 or reply/3.
 %%
 %% Setting a response stream function without a length means that the
-%% body will be sent until the connection is closed. Cowboy will make
+%% body will be sent until the connection is closed. Cowboyku will make
 %% sure that the connection is closed with no extra step required.
 -spec set_resp_body_fun(resp_body_fun(), Req) -> Req when Req::req().
 set_resp_body_fun(StreamFun, Req) when is_function(StreamFun) ->
@@ -915,7 +915,7 @@ set_resp_body_fun(StreamFun, Req) when is_function(StreamFun) ->
 %% The body set here is ignored if the response is later sent using
 %% anything other than reply/2 or reply/3.
 %%
-%% Cowboy will call the given response stream function after sending the
+%% Cowboyku will call the given response stream function after sending the
 %% headers. This function must send the specified number of bytes to the
 %% socket it will receive as argument.
 %%
@@ -956,18 +956,18 @@ delete_resp_header(Name, Req=#http_req{resp_headers=RespHeaders}) ->
 	Req#http_req{resp_headers=RespHeaders2}.
 
 %% @equiv reply(Status, [], [], Req)
--spec reply(cowboy:http_status(), Req) -> {ok, Req} when Req::req().
+-spec reply(cowboyku:http_status(), Req) -> {ok, Req} when Req::req().
 reply(Status, Req=#http_req{resp_body=Body}) ->
 	reply(Status, [], Body, Req).
 
 %% @equiv reply(Status, Headers, [], Req)
--spec reply(cowboy:http_status(), cowboy:http_headers(), Req)
+-spec reply(cowboyku:http_status(), cowboyku:http_headers(), Req)
 	-> {ok, Req} when Req::req().
 reply(Status, Headers, Req=#http_req{resp_body=Body}) ->
 	reply(Status, Headers, Body, Req).
 
 %% @doc Send a reply to the client.
--spec reply(cowboy:http_status(), cowboy:http_headers(),
+-spec reply(cowboyku:http_status(), cowboyku:http_headers(),
 	iodata() | {non_neg_integer() | resp_body_fun()}, Req)
 	-> {ok, Req} when Req::req().
 reply(Status, Headers, Body, Req=#http_req{
@@ -977,7 +977,7 @@ reply(Status, Headers, Body, Req=#http_req{
 		resp_state=RespState, resp_headers=RespHeaders})
 		when RespState =:= waiting; RespState =:= waiting_stream ->
 	HTTP11Headers = if
-		Transport =/= cowboy_spdy, Version =:= 'HTTP/1.1' ->
+		Transport =/= cowboyku_spdy, Version =:= 'HTTP/1.1' ->
 			[{<<"connection">>, atom_to_connection(Connection)}];
 		true ->
 			[]
@@ -996,16 +996,16 @@ reply(Status, Headers, Body, Req=#http_req{
 				_ -> close
 			end,
 			{RespType, Req2} = if
-				Transport =:= cowboy_spdy ->
+				Transport =:= cowboyku_spdy ->
 					response(Status, Headers, RespHeaders, [
-						{<<"date">>, cowboy_clock:rfc1123()},
-						{<<"server">>, <<"Cowboy">>}
+						{<<"date">>, cowboyku_clock:rfc1123()},
+						{<<"server">>, <<"Cowboy">>} % backwards compat from the outside world
 					], stream, Req);
 				true ->
 					response(Status, Headers, RespHeaders, [
 						{<<"connection">>, <<"close">>},
-						{<<"date">>, cowboy_clock:rfc1123()},
-						{<<"server">>, <<"Cowboy">>}
+						{<<"date">>, cowboyku_clock:rfc1123()},
+						{<<"server">>, <<"Cowboy">>} % backwards compat from the outside world
 					], <<>>, Req)
 			end,
 			if	RespType =/= hook, Method =/= <<"HEAD">> ->
@@ -1033,8 +1033,8 @@ reply(Status, Headers, Body, Req=#http_req{
 			RespConn = response_connection(Headers, Connection),
 			{RespType, Req2} = response(Status, Headers, RespHeaders, [
 					{<<"content-length">>, integer_to_list(ContentLength)},
-					{<<"date">>, cowboy_clock:rfc1123()},
-					{<<"server">>, <<"Cowboy">>}
+					{<<"date">>, cowboyku_clock:rfc1123()},
+					{<<"server">>, <<"Cowboy">>} % backwards compat from the outside world
 				|HTTP11Headers], stream, Req),
 			if	RespType =/= hook, Method =/= <<"HEAD">> ->
 					BodyFun(Socket, Transport);
@@ -1076,8 +1076,8 @@ reply_may_compress(Status, Headers, Body, Req,
 					{_, Req3} = response(Status, Headers, RespHeaders, [
 							{<<"content-length">>, integer_to_list(byte_size(GzBody))},
 							{<<"content-encoding">>, <<"gzip">>},
-							{<<"date">>, cowboy_clock:rfc1123()},
-							{<<"server">>, <<"Cowboy">>}
+							{<<"date">>, cowboyku_clock:rfc1123()},
+							{<<"server">>, <<"Cowboy">>} % backwards compat from the outside world
 						|HTTP11Headers],
 						case Method of <<"HEAD">> -> <<>>; _ -> GzBody end,
 						Req2),
@@ -1095,21 +1095,21 @@ reply_no_compress(Status, Headers, Body, Req,
 		RespHeaders, HTTP11Headers, Method, BodySize) ->
 	{_, Req2} = response(Status, Headers, RespHeaders, [
 			{<<"content-length">>, integer_to_list(BodySize)},
-			{<<"date">>, cowboy_clock:rfc1123()},
-			{<<"server">>, <<"Cowboy">>}
+			{<<"date">>, cowboyku_clock:rfc1123()},
+			{<<"server">>, <<"Cowboy">>} % backwards compat from the outside world
 		|HTTP11Headers],
 		case Method of <<"HEAD">> -> <<>>; _ -> Body end,
 		Req),
 	Req2.
 
 %% @equiv chunked_reply(Status, [], Req)
--spec chunked_reply(cowboy:http_status(), Req) -> {ok, Req} when Req::req().
+-spec chunked_reply(cowboyku:http_status(), Req) -> {ok, Req} when Req::req().
 chunked_reply(Status, Req) ->
 	chunked_reply(Status, [], Req).
 
 %% @doc Initiate the sending of a chunked reply to the client.
-%% @see cowboy_req:chunk/2
--spec chunked_reply(cowboy:http_status(), cowboy:http_headers(), Req)
+%% @see cowboyku_req:chunk/2
+-spec chunked_reply(cowboyku:http_status(), cowboyku:http_headers(), Req)
 	-> {ok, Req} when Req::req().
 chunked_reply(Status, Headers, Req) ->
 	{_, Req2} = chunked_response(Status, Headers, Req),
@@ -1121,9 +1121,9 @@ chunked_reply(Status, Headers, Req) ->
 -spec chunk(iodata(), req()) -> ok | {error, atom()}.
 chunk(_Data, #http_req{method= <<"HEAD">>}) ->
 	ok;
-chunk(Data, #http_req{socket=Socket, transport=cowboy_spdy,
+chunk(Data, #http_req{socket=Socket, transport=cowboyku_spdy,
 		resp_state=chunks}) ->
-	cowboy_spdy:stream_data(Socket, Data);
+	cowboyku_spdy:stream_data(Socket, Data);
 chunk(Data, #http_req{socket=Socket, transport=Transport,
 		resp_state=stream}) ->
 	Transport:send(Socket, Data);
@@ -1135,8 +1135,8 @@ chunk(Data, #http_req{socket=Socket, transport=Transport,
 %% @doc Finish the chunked reply.
 %% @todo If ever made public, need to send nothing if HEAD.
 -spec last_chunk(Req) -> Req when Req::req().
-last_chunk(Req=#http_req{socket=Socket, transport=cowboy_spdy}) ->
-	_ = cowboy_spdy:stream_close(Socket),
+last_chunk(Req=#http_req{socket=Socket, transport=cowboyku_spdy}) ->
+	_ = cowboyku_spdy:stream_close(Socket),
 	Req#http_req{resp_state=done};
 last_chunk(Req=#http_req{socket=Socket, transport=Transport}) ->
 	_ = Transport:send(Socket, <<"0\r\n\r\n">>),
@@ -1144,11 +1144,11 @@ last_chunk(Req=#http_req{socket=Socket, transport=Transport}) ->
 
 %% @doc Send an upgrade reply.
 %% @private
--spec upgrade_reply(cowboy:http_status(), cowboy:http_headers(), Req)
+-spec upgrade_reply(cowboyku:http_status(), cowboyku:http_headers(), Req)
 	-> {ok, Req} when Req::req().
 upgrade_reply(Status, Headers, Req=#http_req{transport=Transport,
 		resp_state=waiting, resp_headers=RespHeaders})
-		when Transport =/= cowboy_spdy ->
+		when Transport =/= cowboyku_spdy ->
 	{_, Req2} = response(Status, Headers, RespHeaders, [
 		{<<"connection">>, <<"Upgrade">>}
 	], <<>>, Req),
@@ -1158,18 +1158,18 @@ upgrade_reply(Status, Headers, Req=#http_req{transport=Transport,
 %%
 %% Meant to be used internally for sending errors after crashes.
 %% @private
--spec maybe_reply(cowboy:http_status(), req()) -> ok.
+-spec maybe_reply(cowboyku:http_status(), req()) -> ok.
 maybe_reply(Status, Req) ->
 	receive
-		{cowboy_req, resp_sent} -> ok
+		{cowboyku_req, resp_sent} -> ok
 	after 0 ->
-		_ = cowboy_req:reply(Status, Req),
+		_ = cowboyku_req:reply(Status, Req),
 		ok
 	end.
 
 %% @doc Ensure the response has been sent fully.
 %% @private
--spec ensure_response(req(), cowboy:http_status()) -> ok.
+-spec ensure_response(req(), cowboyku:http_status()) -> ok.
 %% The response has already been fully sent to the client.
 ensure_response(#http_req{resp_state=done}, _) ->
 	ok;
@@ -1261,8 +1261,8 @@ set([{transport, Val}|Tail], Req) -> set(Tail, Req#http_req{transport=Val});
 set([{version, Val}|Tail], Req) -> set(Tail, Req#http_req{version=Val}).
 
 %% @private
--spec set_bindings(cowboy_router:tokens(), cowboy_router:tokens(),
-	cowboy_router:bindings(), Req) -> Req when Req::req().
+-spec set_bindings(cowboyku_router:tokens(), cowboyku_router:tokens(),
+	cowboyku_router:bindings(), Req) -> Req when Req::req().
 set_bindings(HostInfo, PathInfo, Bindings, Req) ->
 	Req#http_req{host_info=HostInfo, path_info=PathInfo,
 		bindings=Bindings}.
@@ -1296,14 +1296,14 @@ to_list(Req) ->
 
 %% Internal.
 
--spec chunked_response(cowboy:http_status(), cowboy:http_headers(), Req) ->
+-spec chunked_response(cowboyku:http_status(), cowboyku:http_headers(), Req) ->
 	{normal | hook, Req} when Req::req().
 chunked_response(Status, Headers, Req=#http_req{
-		transport=cowboy_spdy, resp_state=waiting,
+		transport=cowboyku_spdy, resp_state=waiting,
 		resp_headers=RespHeaders}) ->
 	{RespType, Req2} = response(Status, Headers, RespHeaders, [
-		{<<"date">>, cowboy_clock:rfc1123()},
-		{<<"server">>, <<"Cowboy">>}
+		{<<"date">>, cowboyku_clock:rfc1123()},
+		{<<"server">>, <<"Cowboy">>} % backwards compat from the outside world
 	], stream, Req),
 	{RespType, Req2#http_req{resp_state=chunks,
 		resp_headers=[], resp_body= <<>>}};
@@ -1326,14 +1326,14 @@ chunked_response(Status, Headers, Req=#http_req{
 		true -> stream
 	end,
 	{RespType, Req2} = response(Status, Headers, RespHeaders, [
-		{<<"date">>, cowboy_clock:rfc1123()},
-		{<<"server">>, <<"Cowboy">>}
+		{<<"date">>, cowboyku_clock:rfc1123()},
+		{<<"server">>, <<"Cowboy">>} % backwards compat from the outside world
 	|HTTP11Headers], <<>>, Req),
 	{RespType, Req2#http_req{connection=RespConn, resp_state=RespState2,
 			resp_headers=[], resp_body= <<>>}}.
 
--spec response(cowboy:http_status(), cowboy:http_headers(),
-	cowboy:http_headers(), cowboy:http_headers(), stream | iodata(), Req)
+-spec response(cowboyku:http_status(), cowboyku:http_headers(),
+	cowboyku:http_headers(), cowboyku:http_headers(), stream | iodata(), Req)
 	-> {normal | hook, Req} when Req::req().
 response(Status, Headers, RespHeaders, DefaultHeaders, Body, Req=#http_req{
 		socket=Socket, transport=Transport,
@@ -1353,12 +1353,12 @@ response(Status, Headers, RespHeaders, DefaultHeaders, Body, Req=#http_req{
 					onresponse=already_called})
 	end,
 	ReplyType = case Req2#http_req.resp_state of
-		waiting when Transport =:= cowboy_spdy, Body =:= stream ->
-			cowboy_spdy:stream_reply(Socket, status(Status), FullHeaders),
+		waiting when Transport =:= cowboyku_spdy, Body =:= stream ->
+			cowboyku_spdy:stream_reply(Socket, status(Status), FullHeaders),
 			ReqPid ! {?MODULE, resp_sent},
 			normal;
-		waiting when Transport =:= cowboy_spdy ->
-			cowboy_spdy:reply(Socket, status(Status), FullHeaders, Body),
+		waiting when Transport =:= cowboyku_spdy ->
+			cowboyku_spdy:reply(Socket, status(Status), FullHeaders, Body),
 			ReqPid ! {?MODULE, resp_sent},
 			normal;
 		RespState when RespState =:= waiting; RespState =:= waiting_stream ->
@@ -1374,7 +1374,7 @@ response(Status, Headers, RespHeaders, DefaultHeaders, Body, Req=#http_req{
 	end,
 	{ReplyType, Req2}.
 
--spec response_connection(cowboy:http_headers(), keepalive | close)
+-spec response_connection(cowboyku:http_headers(), keepalive | close)
 	-> keepalive | close.
 response_connection([], Connection) ->
 	Connection;
@@ -1387,17 +1387,17 @@ response_connection([{Name, Value}|Tail], Connection) ->
 			response_connection(Tail, Connection)
 	end.
 
--spec response_merge_headers(cowboy:http_headers(), cowboy:http_headers(),
-	cowboy:http_headers()) -> cowboy:http_headers().
+-spec response_merge_headers(cowboyku:http_headers(), cowboyku:http_headers(),
+	cowboyku:http_headers()) -> cowboyku:http_headers().
 response_merge_headers(Headers, RespHeaders, DefaultHeaders) ->
 	Headers2 = [{Key, Value} || {Key, Value} <- Headers],
 	Merged = merge_headers(
 		merge_headers(Headers2, RespHeaders),
 		DefaultHeaders),
-    [{cowboy_bstr:capitalize_token(Key), Value} || {Key, Value} <- Merged].
+    [{cowboyku_bstr:capitalize_token(Key), Value} || {Key, Value} <- Merged].
 
--spec merge_headers(cowboy:http_headers(), cowboy:http_headers())
-	-> cowboy:http_headers().
+-spec merge_headers(cowboyku:http_headers(), cowboyku:http_headers())
+	-> cowboyku:http_headers().
 
 %% Merge headers by prepending the tuples in the second list to the
 %% first list. It also handles Set-Cookie properly, which supports
@@ -1484,7 +1484,7 @@ connection_to_atom([<<"close">>|_]) ->
 connection_to_atom([_|Tail]) ->
 	connection_to_atom(Tail).
 
--spec status(cowboy:http_status()) -> binary().
+-spec status(cowboyku:http_status()) -> binary().
 status(100) -> <<"100 Continue">>;
 status(101) -> <<"101 Switching Protocols">>;
 status(102) -> <<"102 Processing">>;

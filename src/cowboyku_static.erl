@@ -13,7 +13,7 @@
 %% ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 %% OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
--module(cowboy_static).
+-module(cowboyku_static).
 
 -export([init/3]).
 -export([rest_init/2]).
@@ -40,7 +40,7 @@
 -type state() :: {binary(), {ok, #file_info{}} | {error, atom()}, extra()}.
 
 init(_, _, _) ->
-	{upgrade, protocol, cowboy_rest}.
+	{upgrade, protocol, cowboyku_rest}.
 
 %% @doc Resolve the file that will be sent and get its file information.
 %% If the handler is configured to manage a directory, check that the
@@ -48,7 +48,7 @@ init(_, _, _) ->
 
 -spec rest_init(Req, opts())
 	-> {ok, Req, error | state()}
-	when Req::cowboy_req:req().
+	when Req::cowboyku_req:req().
 rest_init(Req, {Name, Path}) ->
 	rest_init_opts(Req, {Name, Path, []});
 rest_init(Req, {Name, App, Path})
@@ -86,7 +86,7 @@ rest_init_dir(Req, Path, Extra) when is_list(Path) ->
 	rest_init_dir(Req, list_to_binary(Path), Extra);
 rest_init_dir(Req, Path, Extra) ->
 	Dir = fullpath(filename:absname(Path)),
-	{PathInfo, Req2} = cowboy_req:path_info(Req),
+	{PathInfo, Req2} = cowboyku_req:path_info(Req),
 	Filepath = filename:join([Dir|PathInfo]),
 	Len = byte_size(Dir),
 	case fullpath(Filepath) of
@@ -116,42 +116,42 @@ rest_init_info(Req, Path, Extra) ->
 -ifdef(TEST).
 fullpath_test_() ->
 	Tests = [
-		{<<"/home/cowboy">>, <<"/home/cowboy">>},
-		{<<"/home/cowboy">>, <<"/home/cowboy/">>},
-		{<<"/home/cowboy">>, <<"/home/cowboy/./">>},
-		{<<"/home/cowboy">>, <<"/home/cowboy/./././././.">>},
-		{<<"/home/cowboy">>, <<"/home/cowboy/abc/..">>},
-		{<<"/home/cowboy">>, <<"/home/cowboy/abc/../">>},
-		{<<"/home/cowboy">>, <<"/home/cowboy/abc/./../.">>},
-		{<<"/">>, <<"/home/cowboy/../../../../../..">>},
-		{<<"/etc/passwd">>, <<"/home/cowboy/../../etc/passwd">>}
+		{<<"/home/cowboyku">>, <<"/home/cowboyku">>},
+		{<<"/home/cowboyku">>, <<"/home/cowboyku/">>},
+		{<<"/home/cowboyku">>, <<"/home/cowboyku/./">>},
+		{<<"/home/cowboyku">>, <<"/home/cowboyku/./././././.">>},
+		{<<"/home/cowboyku">>, <<"/home/cowboyku/abc/..">>},
+		{<<"/home/cowboyku">>, <<"/home/cowboyku/abc/../">>},
+		{<<"/home/cowboyku">>, <<"/home/cowboyku/abc/./../.">>},
+		{<<"/">>, <<"/home/cowboyku/../../../../../..">>},
+		{<<"/etc/passwd">>, <<"/home/cowboyku/../../etc/passwd">>}
 	],
 	[{P, fun() -> R = fullpath(P) end} || {R, P} <- Tests].
 
 good_path_check_test_() ->
 	Tests = [
-		<<"/home/cowboy/file">>,
-		<<"/home/cowboy/file/">>,
-		<<"/home/cowboy/./file">>,
-		<<"/home/cowboy/././././././file">>,
-		<<"/home/cowboy/abc/../file">>,
-		<<"/home/cowboy/abc/../file">>,
-		<<"/home/cowboy/abc/./.././file">>
+		<<"/home/cowboyku/file">>,
+		<<"/home/cowboyku/file/">>,
+		<<"/home/cowboyku/./file">>,
+		<<"/home/cowboyku/././././././file">>,
+		<<"/home/cowboyku/abc/../file">>,
+		<<"/home/cowboyku/abc/../file">>,
+		<<"/home/cowboyku/abc/./.././file">>
 	],
 	[{P, fun() ->
 		case fullpath(P) of
-			<< "/home/cowboy/", _/binary >> -> ok
+			<< "/home/cowboyku/", _/binary >> -> ok
 		end
 	end} || P <- Tests].
 
 bad_path_check_test_() ->
 	Tests = [
-		<<"/home/cowboy/../../../../../../file">>,
-		<<"/home/cowboy/../../etc/passwd">>
+		<<"/home/cowboyku/../../../../../../file">>,
+		<<"/home/cowboyku/../../etc/passwd">>
 	],
 	[{P, fun() ->
 		error = case fullpath(P) of
-			<< "/home/cowboy/", _/binary >> -> ok;
+			<< "/home/cowboyku/", _/binary >> -> ok;
 			_ -> error
 		end
 	end} || P <- Tests].
@@ -162,18 +162,18 @@ good_path_win32_check_test_() ->
 			[];
 		{win32, _} ->
 			[
-				<<"c:/home/cowboy/file">>,
-				<<"c:/home/cowboy/file/">>,
-				<<"c:/home/cowboy/./file">>,
-				<<"c:/home/cowboy/././././././file">>,
-				<<"c:/home/cowboy/abc/../file">>,
-				<<"c:/home/cowboy/abc/../file">>,
-				<<"c:/home/cowboy/abc/./.././file">>
+				<<"c:/home/cowboyku/file">>,
+				<<"c:/home/cowboyku/file/">>,
+				<<"c:/home/cowboyku/./file">>,
+				<<"c:/home/cowboyku/././././././file">>,
+				<<"c:/home/cowboyku/abc/../file">>,
+				<<"c:/home/cowboyku/abc/../file">>,
+				<<"c:/home/cowboyku/abc/./.././file">>
 			]
 	end,
 	[{P, fun() ->
 		case fullpath(P) of
-			<< "c:/home/cowboy/", _/binary >> -> ok
+			<< "c:/home/cowboyku/", _/binary >> -> ok
 		end
 	end} || P <- Tests].
 
@@ -183,15 +183,15 @@ bad_path_win32_check_test_() ->
 			[];
 		{win32, _} ->
 			[
-				<<"c:/home/cowboy/../../secretfile.bat">>,
-				<<"c:/home/cowboy/c:/secretfile.bat">>,
-				<<"c:/home/cowboy/..\\..\\secretfile.bat">>,
-				<<"c:/home/cowboy/c:\\secretfile.bat">>
+				<<"c:/home/cowboyku/../../secretfile.bat">>,
+				<<"c:/home/cowboyku/c:/secretfile.bat">>,
+				<<"c:/home/cowboyku/..\\..\\secretfile.bat">>,
+				<<"c:/home/cowboyku/c:\\secretfile.bat">>
 			]
 	end,
 	[{P, fun() ->
 		error = case fullpath(P) of
-			<< "c:/home/cowboy/", _/binary >> -> ok;
+			<< "c:/home/cowboyku/", _/binary >> -> ok;
 			_ -> error
 		end
 	end} || P <- Tests].
@@ -275,7 +275,7 @@ last_modified(Req, State={_, {ok, #file_info{mtime=Modified}}, _}) ->
 	{Modified, Req, State}.
 
 %% @doc Stream the file.
-%% @todo Export cowboy_req:resp_body_fun()?
+%% @todo Export cowboyku_req:resp_body_fun()?
 
 -spec get_file(Req, State)
 	-> {{stream, non_neg_integer(), fun()}, Req, State}
